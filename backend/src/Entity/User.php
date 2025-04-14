@@ -64,6 +64,9 @@ class User
     #[ORM\OneToMany(targetEntity: UserScore::class, mappedBy: 'user')]
     private Collection $UserScore;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $profile_picture = null;
+
     public function __construct()
     {
         $this->Ban = new ArrayCollection();
@@ -296,6 +299,18 @@ class User
                 $userScore->setUser(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getProfilePicture(): ?string
+    {
+        return $this->profile_picture;
+    }
+
+    public function setProfilePicture(?string $profile_picture): static
+    {
+        $this->profile_picture = $profile_picture;
 
         return $this;
     }
