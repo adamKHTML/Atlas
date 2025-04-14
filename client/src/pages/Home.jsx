@@ -15,37 +15,41 @@ function Home() {
                     <div className="contact-link">Register/Log in</div>
                 </div>
                 <img
-                    src="/image/Atlashome.svg"
+                    src="/image/Atlashome2.svg"
                     alt="Vue panoramique de montagnes côtières"
                     className="hero-image"
                 />
             </div>
-
-            {/* Featured Images Grid */}
-            <div className="featured-section">
-                <div className="featured-grid">
-                    <div className="featured-item big-image">
-                        <img
-                            src="/image/Inspirehome.svg"
-                            alt="Terrasses agricoles avec parapluie rouge"
-                            className="grid-image"
-                        />
-                    </div>
-                    <div className="featured-item big-image">
-                        <img
-                            src="/image/Ricefieldhome.svg"
-                            alt="Deux personnes se tenant la main devant un paysage côtier"
-                            className="grid-image"
-                        />
-                    </div>
-                    <div className="featured-item big-image">
-                        <img
-                            src="/image/Toscanahome2.svg"
-                            alt="Collines toscanes au coucher du soleil"
-                            className="grid-image"
-                        />
+            <div className="content">
+                <div className="featured-container">
+                    <div className="featured-grid">
+                        <div className="featured-item big-image">
+                            <img
+                                src="/image/Inspirehome.svg"
+                                alt="Terrasses agricoles avec parapluie rouge"
+                                className="grid-image"
+                            />
+                        </div>
+                        <div className="featured-item big-image">
+                            <img
+                                src="/image/Ricefieldhome.svg"
+                                alt="Deux personnes se tenant la main devant un paysage côtier"
+                                className="grid-image"
+                            />
+                        </div>
+                        <div className="featured-item big-image">
+                            <img
+                                src="/image/Toscanahome2.svg"
+                                alt="Collines toscanes au coucher du soleil"
+                                className="grid-image"
+                            />
+                        </div>
                     </div>
                 </div>
+            </div>
+            {/* Featured Images Grid */}
+            <div className="featured-section">
+
 
                 {/* Title Section */}
                 <div className="title-section">
