@@ -1,6 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
-
 const API_URL = "http://localhost:8000";
 
 export const apiSlice = createApi({
@@ -16,6 +15,6 @@ export const apiSlice = createApi({
             return headers;
         },
     }),
-    tagTypes: ['Countries', 'Auth'],
+    tagTypes: ['Register', 'Auth', 'Country', 'Quiz', 'Discussion', 'Message'],
     endpoints: () => ({}),
 });

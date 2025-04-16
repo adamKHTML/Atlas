@@ -1,6 +1,6 @@
 import React from 'react';
 import CountryGrid from '../features/country/CountryGrid';
-
+import { Link } from 'react-router-dom';
 
 function Home() {
     return (
@@ -12,7 +12,22 @@ function Home() {
                         src="/image/SunLogo.svg"
                         alt='Solar Atlas Logo'
                         className="logo" />
-                    <div className="contact-link">Register/Log in</div>
+                    <div className="flex items-center space-x-4">
+                        <Link
+                            to="/login"
+                            className="border border-dashed border-white rounded-full px-5 py-2 inline-flex items-center text-white hover:bg-white/20 transition-colors"
+                        >
+                            <span className="text-yellow-400 mr-2">✦</span>
+                            Connexion
+                        </Link>
+                        <Link
+                            to="/register"
+                            className="border border-dashed border-white rounded-full px-5 py-2 inline-flex items-center text-white hover:bg-white/20 transition-colors"
+                        >
+                            <span className="text-yellow-400 mr-2">✦</span>
+                            Inscription
+                        </Link>
+                    </div>
                 </div>
                 <img
                     src="/image/Atlashome2.svg"

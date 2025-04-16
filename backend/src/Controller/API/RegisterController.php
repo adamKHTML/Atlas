@@ -3,6 +3,7 @@
 namespace App\Controller\API;
 
 use App\Entity\User;
+use App\Service\MailerService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -10,12 +11,15 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
+use Psr\Log\LoggerInterface;
 
 class RegisterController extends AbstractController
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
-        private UserPasswordHasherInterface $passwordHasher
+        private UserPasswordHasherInterface $passwordHasher,
+        private MailerService $mailerService,
+        private LoggerInterface $logger
     ) {}
 
     #[Route('/api/register', name: 'api_register', methods: ['POST'])]
@@ -44,12 +48,38 @@ class RegisterController extends AbstractController
             return $this->jsonResponse('Email already exists', Response::HTTP_CONFLICT);
         }
 
-        $user = $this->createUser($data, $profilePicture);
-        
-        return $this->jsonResponse([
-            'message' => 'User created with ROLE_VOYAGEUR',
-            'user' => $this->getUserData($user)
-        ], Response::HTTP_CREATED);
+        try {
+            $user = $this->createUser($data, $profilePicture);
+            
+            // Générer le token pour la vérification d'email
+            $token = bin2hex(random_bytes(32));
+            $expiresAt = new \DateTime('+24 hours');
+            
+            $user->setVerificationToken($token);
+            $user->setVerificationTokenExpiresAt($expiresAt);
+            
+            $this->entityManager->flush();
+            
+            // Envoyer l'email de vérification
+            try {
+                $this->mailerService->sendVerificationEmail($user);
+                $this->logger->info('Verification email sent', ['user_id' => $user->getId()]);
+            } catch (\Exception $e) {
+                $this->logger->error('Failed to send verification email', [
+                    'user_id' => $user->getId(),
+                    'error' => $e->getMessage()
+                ]);
+                // On continue même si l'envoi d'email échoue
+            }
+            
+            return $this->jsonResponse([
+                'message' => 'User created successfully. Please check your email to verify your account.',
+                'user' => $this->getUserData($user)
+            ], Response::HTTP_CREATED);
+        } catch (\Exception $e) {
+            $this->logger->error('Registration failed', ['error' => $e->getMessage()]);
+            return $this->jsonResponse(['error' => 'An error occurred during registration'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     private function validateRequiredFields(array $data): bool
@@ -88,7 +118,7 @@ class RegisterController extends AbstractController
         $user = new User();
         $user->setEmail($data['email'])
             ->setPseudo($data['pseudo'])
-            ->setRoles(['ROLE_VOYAGEUR'])
+            ->setRoles(['ROLE_USER']) // Rôle de base, sera promu en ROLE_VOYAGEUR après vérification
             ->setPassword($this->passwordHasher->hashPassword($user, $data['password']))
             ->setIsVerified(false);
 
@@ -118,6 +148,7 @@ class RegisterController extends AbstractController
             $file->move($uploadsDirectory, $filename);
             return ['success' => true, 'path' => '/uploads/avatars/' . $filename];
         } catch (\Exception $e) {
+            $this->logger->error('Avatar upload failed', ['error' => $e->getMessage()]);
             return ['success' => false, 'message' => 'Erreur lors de l\'upload'];
         }
     }
@@ -125,9 +156,12 @@ class RegisterController extends AbstractController
     private function getUserData(User $user): array
     {
         return [
+            'id' => $user->getId(),
             'email' => $user->getEmail(),
             'pseudo' => $user->getPseudo(),
-            'profilePicture' => $user->getProfilePicture()
+            'profilePicture' => $user->getProfilePicture(),
+            'roles' => $user->getRoles(),
+            'isVerified' => $user->isVerified()
         ];
     }
 

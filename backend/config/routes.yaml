@@ -3,3 +3,9 @@ controllers:
         path: ../src/Controller/
         namespace: App\Controller
     type: attribute
+favicon:
+    path: /favicon.ico
+    controller: Symfony\Component\HttpFoundation\Response
+    defaults:
+        content: ''
+        status: 204
