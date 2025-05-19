@@ -8,6 +8,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import VerifyEmail from './pages/VerifyEmail';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path='/Dashboard' element={<Dashboard />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
         </Routes>
       </Router>
     </Provider>

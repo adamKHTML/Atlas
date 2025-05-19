@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useLoginMutation } from '../../api/endpoints/auth';
+import { useDispatch } from 'react-redux';
+import { setUser } from '../../store/slices/authSlice';
 
 export const LoginForm = () => {
     const [credentials, setCredentials] = useState({
-        username: '', // Le backend attend 'username' pour lexik_jwt
+        email: '',
         password: ''
     });
 
     const [showPassword, setShowPassword] = useState(false);
-    const [login, { isLoading }] = useLoginMutation();
+    const [login, { isLoading, error }] = useLoginMutation();
     const navigate = useNavigate();
+    const dispatch = useDispatch();
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -24,23 +27,36 @@ export const LoginForm = () => {
         e.preventDefault();
 
         try {
-            await login(credentials).unwrap();
-            navigate('/dashboard');
+            const response = await login(credentials).unwrap();
+
+            if (response.success && response.user) {
+                // Stockez les données utilisateur dans Redux au lieu de localStorage
+                dispatch(setUser(response.user));
+
+                // Rediriger vers le dashboard
+                navigate('/dashboard');
+            }
         } catch (error) {
-            console.error('Login error:', error);
+            console.error('Erreur de connexion:', error);
         }
     };
 
     return (
         <form onSubmit={handleSubmit} className="login-form">
+            {error && (
+                <div className="error-message">
+                    {error.data?.error || 'Une erreur est survenue lors de la connexion.'}
+                </div>
+            )}
+
             <div className="form-group">
-                <label htmlFor="username">Email</label>
+                <label htmlFor="email">Email</label>
                 <input
-                    id="username"
-                    name="username"
+                    id="email"
+                    name="email"
                     type="email"
                     required
-                    value={credentials.username}
+                    value={credentials.email}
                     onChange={handleChange}
                     placeholder="votre@email.com"
                 />

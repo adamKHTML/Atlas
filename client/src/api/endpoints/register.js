@@ -1,37 +1,38 @@
 import { apiSlice } from '../apiSlice';
 
-
 export const registerApi = apiSlice.injectEndpoints({
     endpoints: (builder) => ({
         register: builder.mutation({
             query: (userData) => {
-                // Si le userData contient un fichier (avatar), on utilise FormData
-                if (userData.profile_picture instanceof File) {
-                    const formData = new FormData();
-
-                    // Ajout des données textuelles
-                    Object.keys(userData).forEach(key => {
-                        if (key !== 'profile_picture') {
-                            formData.append(key, userData[key]);
-                        }
-                    });
-
-                    // Ajout de l'avatar
-                    formData.append('profile_picture', userData.profile_picture);
-
+                // Si userData est déjà un FormData, l'utiliser directement
+                if (userData instanceof FormData) {
                     return {
                         url: '/api/register',
                         method: 'POST',
-                        body: formData,
-                        formData: true, // Important pour que RTK Query ne sérialise pas le FormData
+                        body: userData,
+                        // Ne pas définir Content-Type, le navigateur le fera automatiquement
                     };
                 }
 
-                // Si pas de fichier, on envoie le body directement
+                // Sinon, créer un nouveau FormData
+                const formData = new FormData();
+
+                // Ajouter chaque champ
+                Object.keys(userData).forEach(key => {
+                    if (userData[key] !== null && userData[key] !== undefined) {
+                        formData.append(key, userData[key]);
+                    }
+                });
+
+                // Log pour débogage (à supprimer en production)
+                console.log('Envoi du FormData avec les champs:', [...formData.entries()].map(e => e[0]));
+
                 return {
                     url: '/api/register',
                     method: 'POST',
-                    body: userData,
+                    body: formData,
+                    // Ne pas définir Content-Type, le navigateur le fera automatiquement
+                    // Ne pas utiliser formData: true (option non standard qui cause des problèmes)
                 };
             },
             invalidatesTags: [{ type: 'Auth', id: 'STATUS' }],

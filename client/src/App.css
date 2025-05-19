@@ -494,6 +494,73 @@
   font-size: 14px;
   color: #666;
 }
+
+.verify-email-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: #ECF3F0;
+  padding: 20px;
+}
+
+.verify-email-card {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 30px;
+  width: 100%;
+  max-width: 500px;
+  text-align: center;
+}
+
+.verify-email-card h1 {
+  font-family: 'Vollkorn', serif;
+  color: #2E3830;
+  margin-bottom: 20px;
+}
+
+.loading-state,
+.success-state,
+.error-state {
+  padding: 20px;
+}
+
+.success-icon,
+.error-icon {
+  font-size: 48px;
+  margin-bottom: 20px;
+}
+
+.success-icon {
+  color: #4CAF50;
+}
+
+.error-icon {
+  color: #F44336;
+}
+
+.redirect-button {
+  background-color: transparent;
+  color: #2E3830;
+  border: 1px dashed #2E3830;
+  border-radius: 50px;
+  padding: 10px 20px;
+  margin-top: 20px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.redirect-button:hover {
+  background-color: rgba(46, 56, 48, 0.05);
+}
+
+.redirect-button::before {
+  content: "✦";
+  color: #F3CB23;
+  margin-right: 8px;
+}
+
 /* Responsive Adjustments */
 @media (max-width: 768px) {
   .featured-grid {
@@ -510,3 +577,4 @@
     grid-template-columns: 1fr;
   }
 }
+
