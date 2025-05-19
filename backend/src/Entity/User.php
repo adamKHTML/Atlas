@@ -7,9 +7,11 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
+use Symfony\Component\Security\Core\User\UserInterface;
 
 #[ORM\Entity(repositoryClass: UserRepository::class)]
-class User
+class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -66,6 +68,16 @@ class User
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $profile_picture = null;
+   
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+private bool $isVerified = false;
+
+#[ORM\Column(length: 255, nullable: true)]
+private ?string $verificationToken = null;
+
+#[ORM\Column(type: Types::DATETIME_MUTABLE, nullable: true)]
+private ?\DateTimeInterface $verificationTokenExpiresAt = null;
+
 
     public function __construct()
     {
@@ -142,9 +154,13 @@ class User
     }
 
     public function getRoles(): array
-    {
-        return $this->roles;
-    }
+{
+    $roles = $this->roles;
+    
+    $roles[] = 'ROLE_USER';
+
+    return array_unique($roles);
+}
 
     public function setRoles(array $roles): static
     {
@@ -314,4 +330,51 @@ class User
 
         return $this;
     }
+
+    public function getUserIdentifier(): string
+{
+    return (string) $this->email;
+}
+
+public function eraseCredentials(): void
+{
+    // If you store any temporary, sensitive data on the user, clear it here
+    // $this->plainPassword = null;
+}
+
+public function isVerified(): bool
+{
+    return $this->isVerified;
+}
+
+public function setIsVerified(bool $isVerified): static
+{
+    $this->isVerified = $isVerified;
+
+    return $this;
+}
+
+public function getVerificationToken(): ?string
+{
+    return $this->verificationToken;
+}
+
+public function setVerificationToken(?string $verificationToken): static
+{
+    $this->verificationToken = $verificationToken;
+
+    return $this;
+}
+
+public function getVerificationTokenExpiresAt(): ?\DateTimeInterface
+{
+    return $this->verificationTokenExpiresAt;
+}
+
+public function setVerificationTokenExpiresAt(?\DateTimeInterface $verificationTokenExpiresAt): static
+{
+    $this->verificationTokenExpiresAt = $verificationTokenExpiresAt;
+
+    return $this;
+}
 }
