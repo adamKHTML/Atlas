@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "country-flag-icons": "^1.5.19",
+    "country-list": "^2.3.0",
+    "lucide-react": "^0.511.0",
+    "react-select-country-list": "^2.2.3"
+  }
+}

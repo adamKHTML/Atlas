@@ -9,6 +9,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import VerifyEmail from './pages/VerifyEmail';
+import CountryForm from './features/country/administration/CountryForm';
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path='/Dashboard' element={<Dashboard />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path='/country-form' element={<CountryForm />} />
         </Routes>
       </Router>
     </Provider>
