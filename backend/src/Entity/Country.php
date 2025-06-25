@@ -58,6 +58,9 @@ class Country
     #[ORM\OneToMany(targetEntity: Analytics::class, mappedBy: 'Country')]
     private Collection $analytics;
 
+    #[ORM\Column(length: 255)]
+    private ?string $country_image = null;
+
     public function __construct()
     {
         $this->Content = new ArrayCollection();
@@ -259,6 +262,18 @@ class Country
                 $analytic->setCountry(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getCountryImage(): ?string
+    {
+        return $this->country_image;
+    }
+
+    public function setCountryImage(string $country_image): static
+    {
+        $this->country_image = $country_image;
 
         return $this;
     }

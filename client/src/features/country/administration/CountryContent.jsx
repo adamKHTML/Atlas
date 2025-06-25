@@ -1,421 +1,395 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
-    Globe, Plus, Type, Image, Video, Move, Trash2,
-    Bold, Italic, Underline, List, AlignLeft, AlignCenter, AlignRight,
-    Eye, Save, ArrowLeft, Upload, Play
+    Globe,
+    ArrowRight,
+    ArrowLeft,
+    Check,
+    Plus,
+    Trash2,
+    Image as ImageIcon,
+    Type,
+    Video,
+    Move,
+    Upload,
+    Eye,
+    Save
 } from 'lucide-react';
+import { useUpdateCountryContentMutation, useUploadSectionImageMutation } from '../../../api/endpoints/admin/countries';
 
 const CountryContent = () => {
-    // Données du pays (provenant de l'étape 1)
-    const [countryData] = useState({
-        name: 'France',
-        code: 'FR',
-        flag: 'https://flagcdn.com/w320/fr.png',
-        image: 'https://images.unsplash.com/photo-1549144511-f099e773c147?w=800',
-        description: 'Pays de la gastronomie et de l\'art de vivre, la France offre une richesse culturelle exceptionnelle avec ses monuments historiques, sa cuisine raffinée et ses paysages variés.'
-    });
+    const navigate = useNavigate();
+    const { countryId } = useParams();
+    const location = useLocation();
+
+    // Récupération des données du pays depuis l'étape 1
+    const countryData = location.state?.countryData;
+    const fromCreation = location.state?.fromCreation;
+
+    const [updateCountryContent, { isLoading: isUpdating }] = useUpdateCountryContentMutation();
+    const [uploadSectionImage, { isLoading: isUploading }] = useUploadSectionImageMutation();
 
     const [sections, setSections] = useState([]);
-    const [previewMode, setPreviewMode] = useState(false);
-    const [loading, setLoading] = useState(false);
+    const [showPreview, setShowPreview] = useState(false);
+    const [errors, setErrors] = useState({});
+
+    // Initialisation avec une section par défaut
+    useEffect(() => {
+        if (sections.length === 0) {
+            setSections([{
+                id: Date.now(),
+                type: 'text',
+                title: '',
+                content: '',
+                imageUrl: null,
+                order: 1
+            }]);
+        }
+    }, []);
 
     // Types de sections disponibles
     const sectionTypes = [
-        { id: 'text', name: 'Paragraphe de texte', icon: Type, description: 'Ajouter du contenu textuel' },
-        { id: 'image', name: 'Image', icon: Image, description: 'Ajouter une image avec légende' },
-        { id: 'video', name: 'Vidéo', icon: Video, description: 'Intégrer une vidéo YouTube/Vimeo' }
+        { id: 'text', label: 'Texte', icon: Type, description: 'Paragraphe de texte' },
+        { id: 'image', label: 'Image', icon: ImageIcon, description: 'Image avec légende' },
+        { id: 'video', label: 'Vidéo', icon: Video, description: 'Vidéo YouTube/Vimeo' }
     ];
 
-    // Ajouter une nouvelle section
-    const addSection = (type) => {
+    const addSection = (type = 'text') => {
         const newSection = {
             id: Date.now(),
-            type: type,
-            content: type === 'text' ? '' : '',
+            type,
             title: '',
-            imageUrl: '',
-            videoUrl: '',
-            caption: '',
-            alignment: 'left',
-            order: sections.length
+            content: '',
+            imageUrl: null,
+            order: sections.length + 1
         };
         setSections([...sections, newSection]);
     };
 
-    // Supprimer une section
+    const updateSection = (sectionId, field, value) => {
+        setSections(sections.map(section =>
+            section.id === sectionId
+                ? { ...section, [field]: value }
+                : section
+        ));
+
+        // Réinitialiser l'erreur pour cette section
+        if (errors[sectionId]) {
+            setErrors(prev => ({
+                ...prev,
+                [sectionId]: { ...prev[sectionId], [field]: null }
+            }));
+        }
+    };
+
     const removeSection = (sectionId) => {
+        if (sections.length <= 1) {
+            alert('Vous devez conserver au moins une section');
+            return;
+        }
         setSections(sections.filter(section => section.id !== sectionId));
     };
 
-    // Mettre à jour une section
-    const updateSection = (sectionId, updates) => {
-        setSections(sections.map(section =>
-            section.id === sectionId ? { ...section, ...updates } : section
-        ));
-    };
-
-    // Déplacer une section
     const moveSection = (sectionId, direction) => {
-        const currentIndex = sections.findIndex(section => section.id === sectionId);
+        const index = sections.findIndex(s => s.id === sectionId);
         if (
-            (direction === 'up' && currentIndex === 0) ||
-            (direction === 'down' && currentIndex === sections.length - 1)
-        ) return;
+            (direction === 'up' && index === 0) ||
+            (direction === 'down' && index === sections.length - 1)
+        ) {
+            return;
+        }
 
         const newSections = [...sections];
-        const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-        [newSections[currentIndex], newSections[targetIndex]] = [newSections[targetIndex], newSections[currentIndex]];
-        setSections(newSections);
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        [newSections[index], newSections[targetIndex]] = [newSections[targetIndex], newSections[index]];
+
+        setSections(newSections.map((section, idx) => ({
+            ...section,
+            order: idx + 1
+        })));
     };
 
-    // Barre d'outils de formatage
-    const TextToolbar = ({ sectionId, content, onUpdate }) => {
-        const [selectedText, setSelectedText] = useState('');
+    const handleImageUpload = async (sectionId, file) => {
+        if (!file) return;
 
-        const formatText = (command) => {
-            document.execCommand(command, false, null);
-        };
+        // Validation côté client
+        if (file.size > 5 * 1024 * 1024) {
+            setErrors(prev => ({
+                ...prev,
+                [sectionId]: { ...prev[sectionId], image: 'L\'image ne doit pas dépasser 5MB' }
+            }));
+            return;
+        }
+
+        if (!file.type.startsWith('image/')) {
+            setErrors(prev => ({
+                ...prev,
+                [sectionId]: { ...prev[sectionId], image: 'Veuillez sélectionner un fichier image valide' }
+            }));
+            return;
+        }
+
+        try {
+            console.log('📤 Upload d\'image en cours...', { sectionId, fileName: file.name });
+
+            const imageUrl = await uploadSectionImage({
+                countryId: parseInt(countryId),
+                imageFile: file
+            }).unwrap();
+
+            console.log('✅ Image uploadée avec succès:', imageUrl);
+
+            updateSection(sectionId, 'imageUrl', imageUrl);
+
+            // Réinitialiser les erreurs pour cette section
+            setErrors(prev => ({
+                ...prev,
+                [sectionId]: { ...prev[sectionId], image: null }
+            }));
+
+        } catch (error) {
+            console.error('❌ Erreur upload image:', error);
+
+            const errorMessage = error?.data?.error || 'Erreur lors de l\'upload de l\'image';
+            setErrors(prev => ({
+                ...prev,
+                [sectionId]: { ...prev[sectionId], image: errorMessage }
+            }));
+        }
+    };
+
+    const validateSections = () => {
+        const newErrors = {};
+        let hasErrors = false;
+
+        sections.forEach(section => {
+            const sectionErrors = {};
+
+            if (!section.title.trim()) {
+                sectionErrors.title = 'Le titre est obligatoire';
+                hasErrors = true;
+            }
+
+            if (section.type === 'text' && !section.content.trim()) {
+                sectionErrors.content = 'Le contenu est obligatoire';
+                hasErrors = true;
+            }
+
+            if (section.type === 'image' && !section.imageUrl) {
+                sectionErrors.image = 'Veuillez ajouter une image';
+                hasErrors = true;
+            }
+
+            if (Object.keys(sectionErrors).length > 0) {
+                newErrors[section.id] = sectionErrors;
+            }
+        });
+
+        setErrors(newErrors);
+        return !hasErrors;
+    };
+
+    const handleSave = async () => {
+        if (!validateSections()) {
+            return;
+        }
+
+        try {
+            // Préparation des données pour l'API Symfony
+            const sectionsData = sections.map(section => ({
+                title: section.title,
+                content: section.content, // ✅ Correspond au champ 'section' dans l'entité Content
+                type: section.type
+                // Note: on n'envoie pas image_url ici car c'est géré séparément
+            }));
+
+            const result = await updateCountryContent({
+                countryId: parseInt(countryId),
+                sections: sectionsData
+            }).unwrap();
+
+            console.log('✅ Contenu sauvegardé avec succès:', result);
+
+            // Redirection vers le Dashboard avec message de succès
+            navigate('/Dashboard', {
+                state: {
+                    message: `Le pays "${countryData?.name || 'nouveau pays'}" a été créé avec succès !`,
+                    type: 'success'
+                }
+            });
+
+        } catch (error) {
+            console.error('❌ Erreur lors de la sauvegarde:', error);
+
+            // Affichage d'une erreur plus détaillée
+            const errorMessage = error?.data?.error || error?.message || 'Erreur lors de la sauvegarde. Veuillez réessayer.';
+            setErrors({ general: errorMessage });
+        }
+    };
+
+    const renderSectionEditor = (section, index) => {
+        const sectionErrors = errors[section.id] || {};
 
         return (
-            <div className="flex items-center space-x-2 p-2 border-b" style={{ borderColor: '#e0e0e0', backgroundColor: '#f9f9f9' }}>
-                <button
-                    onClick={() => formatText('bold')}
-                    className="p-1 rounded hover:bg-white transition-colors"
-                    title="Gras"
-                >
-                    <Bold size={16} style={{ color: '#1c2a28' }} />
-                </button>
-                <button
-                    onClick={() => formatText('italic')}
-                    className="p-1 rounded hover:bg-white transition-colors"
-                    title="Italique"
-                >
-                    <Italic size={16} style={{ color: '#1c2a28' }} />
-                </button>
-                <button
-                    onClick={() => formatText('underline')}
-                    className="p-1 rounded hover:bg-white transition-colors"
-                    title="Souligné"
-                >
-                    <Underline size={16} style={{ color: '#1c2a28' }} />
-                </button>
-                <div className="w-px h-4" style={{ backgroundColor: '#e0e0e0' }}></div>
-                <button
-                    onClick={() => formatText('insertUnorderedList')}
-                    className="p-1 rounded hover:bg-white transition-colors"
-                    title="Liste à puces"
-                >
-                    <List size={16} style={{ color: '#1c2a28' }} />
-                </button>
-                <div className="w-px h-4" style={{ backgroundColor: '#e0e0e0' }}></div>
-                <button
-                    onClick={() => formatText('justifyLeft')}
-                    className="p-1 rounded hover:bg-white transition-colors"
-                    title="Aligner à gauche"
-                >
-                    <AlignLeft size={16} style={{ color: '#1c2a28' }} />
-                </button>
-                <button
-                    onClick={() => formatText('justifyCenter')}
-                    className="p-1 rounded hover:bg-white transition-colors"
-                    title="Centrer"
-                >
-                    <AlignCenter size={16} style={{ color: '#1c2a28' }} />
-                </button>
-                <button
-                    onClick={() => formatText('justifyRight')}
-                    className="p-1 rounded hover:bg-white transition-colors"
-                    title="Aligner à droite"
-                >
-                    <AlignRight size={16} style={{ color: '#1c2a28' }} />
-                </button>
+            <div key={section.id} className="bg-white border rounded-lg overflow-hidden" style={{ borderColor: '#e0e0e0' }}>
+                {/* En-tête de section */}
+                <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between" style={{ borderColor: '#e0e0e0' }}>
+                    <div className="flex items-center space-x-3">
+                        <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium text-white" style={{ backgroundColor: '#F3CB23' }}>
+                            {index + 1}
+                        </div>
+                        <select
+                            value={section.type}
+                            onChange={(e) => updateSection(section.id, 'type', e.target.value)}
+                            className="text-sm border-none bg-transparent font-medium focus:outline-none"
+                        >
+                            {sectionTypes.map(type => (
+                                <option key={type.id} value={type.id}>{type.label}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                        <button
+                            onClick={() => moveSection(section.id, 'up')}
+                            disabled={index === 0}
+                            className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                        >
+                            ↑
+                        </button>
+                        <button
+                            onClick={() => moveSection(section.id, 'down')}
+                            disabled={index === sections.length - 1}
+                            className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                        >
+                            ↓
+                        </button>
+                        <button
+                            onClick={() => removeSection(section.id)}
+                            className="p-1 text-red-400 hover:text-red-600"
+                        >
+                            <Trash2 size={16} />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Contenu de la section */}
+                <div className="p-4 space-y-4">
+                    {/* Titre */}
+                    <div>
+                        <label className="block text-sm font-medium mb-2" style={{ color: '#1c2a28' }}>
+                            Titre de la section *
+                        </label>
+                        <input
+                            type="text"
+                            value={section.title}
+                            onChange={(e) => updateSection(section.id, 'title', e.target.value)}
+                            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-opacity-50 ${sectionErrors.title ? 'border-red-300' : 'border-gray-300'}`}
+                            style={{ '--tw-ring-color': sectionErrors.title ? '#ef4444' : '#F3CB23' }}
+                            placeholder="Ex: Histoire du pays, Culture locale..."
+                        />
+                        {sectionErrors.title && (
+                            <p className="text-sm text-red-600 mt-1">{sectionErrors.title}</p>
+                        )}
+                    </div>
+
+                    {/* Contenu selon le type */}
+                    {section.type === 'text' && (
+                        <div>
+                            <label className="block text-sm font-medium mb-2" style={{ color: '#1c2a28' }}>
+                                Contenu *
+                            </label>
+                            <textarea
+                                value={section.content}
+                                onChange={(e) => updateSection(section.id, 'content', e.target.value)}
+                                className={`w-full px-3 py-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-opacity-50 ${sectionErrors.content ? 'border-red-300' : 'border-gray-300'}`}
+                                style={{ '--tw-ring-color': sectionErrors.content ? '#ef4444' : '#F3CB23' }}
+                                rows={6}
+                                placeholder="Rédigez le contenu de cette section..."
+                            />
+                            {sectionErrors.content && (
+                                <p className="text-sm text-red-600 mt-1">{sectionErrors.content}</p>
+                            )}
+                        </div>
+                    )}
+
+                    {section.type === 'image' && (
+                        <div>
+                            <label className="block text-sm font-medium mb-2" style={{ color: '#1c2a28' }}>
+                                Image *
+                            </label>
+
+                            {!section.imageUrl ? (
+                                <div
+                                    className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${sectionErrors.image ? 'border-red-300' : 'border-gray-300 hover:border-yellow-400'}`}
+                                    onClick={() => document.getElementById(`image-upload-${section.id}`).click()}
+                                >
+                                    <Upload className="mx-auto mb-2 text-gray-400" size={32} />
+                                    <p className="text-sm text-gray-600">Cliquez pour ajouter une image</p>
+                                    <input
+                                        type="file"
+                                        id={`image-upload-${section.id}`}
+                                        accept="image/*"
+                                        onChange={(e) => handleImageUpload(section.id, e.target.files[0])}
+                                        className="hidden"
+                                    />
+                                </div>
+                            ) : (
+                                <div className="relative">
+                                    <img
+                                        src={section.imageUrl}
+                                        alt="Section"
+                                        className="w-full h-48 object-cover rounded-lg"
+                                    />
+                                    <button
+                                        onClick={() => updateSection(section.id, 'imageUrl', null)}
+                                        className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            )}
+
+                            {sectionErrors.image && (
+                                <p className="text-sm text-red-600 mt-1">{sectionErrors.image}</p>
+                            )}
+
+                            {/* Légende */}
+                            <div className="mt-3">
+                                <label className="block text-sm font-medium mb-2" style={{ color: '#1c2a28' }}>
+                                    Légende (optionnel)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={section.content}
+                                    onChange={(e) => updateSection(section.id, 'content', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-opacity-50"
+                                    style={{ '--tw-ring-color': '#F3CB23' }}
+                                    placeholder="Légende de l'image..."
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {section.type === 'video' && (
+                        <div>
+                            <label className="block text-sm font-medium mb-2" style={{ color: '#1c2a28' }}>
+                                URL de la vidéo (YouTube, Vimeo...)
+                            </label>
+                            <input
+                                type="url"
+                                value={section.content}
+                                onChange={(e) => updateSection(section.id, 'content', e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-opacity-50"
+                                style={{ '--tw-ring-color': '#F3CB23' }}
+                                placeholder="https://youtube.com/watch?v=..."
+                            />
+                        </div>
+                    )}
+                </div>
             </div>
         );
     };
-
-    // Composant section de texte
-    const TextSection = ({ section }) => (
-        <div className="border rounded-lg overflow-hidden" style={{ borderColor: '#e0e0e0' }}>
-            <div className="flex items-center justify-between p-3" style={{ backgroundColor: '#ECF3F0' }}>
-                <div className="flex items-center space-x-2">
-                    <Type size={16} style={{ color: '#F3CB23' }} />
-                    <span className="text-sm font-medium" style={{ color: '#1c2a28' }}>Paragraphe de texte</span>
-                </div>
-                <SectionControls sectionId={section.id} />
-            </div>
-
-            <input
-                type="text"
-                placeholder="Titre de la section (optionnel)"
-                value={section.title}
-                onChange={(e) => updateSection(section.id, { title: e.target.value })}
-                className="w-full px-3 py-2 border-b focus:outline-none"
-                style={{ borderColor: '#e0e0e0' }}
-            />
-
-            <TextToolbar sectionId={section.id} content={section.content} onUpdate={updateSection} />
-
-            <div
-                contentEditable
-                suppressContentEditableWarning
-                className="p-4 min-h-32 focus:outline-none"
-                style={{ color: '#1c2a28' }}
-                onInput={(e) => updateSection(section.id, { content: e.target.innerHTML })}
-                placeholder="Écrivez votre contenu ici..."
-            />
-        </div>
-    );
-
-    // Composant section d'image
-    const ImageSection = ({ section }) => (
-        <div className="border rounded-lg overflow-hidden" style={{ borderColor: '#e0e0e0' }}>
-            <div className="flex items-center justify-between p-3" style={{ backgroundColor: '#ECF3F0' }}>
-                <div className="flex items-center space-x-2">
-                    <Image size={16} style={{ color: '#F3CB23' }} />
-                    <span className="text-sm font-medium" style={{ color: '#1c2a28' }}>Image</span>
-                </div>
-                <SectionControls sectionId={section.id} />
-            </div>
-
-            <div className="p-4 space-y-4">
-                {!section.imageUrl ? (
-                    <div
-                        className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-opacity-70 transition-all"
-                        style={{ borderColor: '#F3CB23' }}
-                        onClick={() => document.getElementById(`image-upload-${section.id}`).click()}
-                    >
-                        <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            id={`image-upload-${section.id}`}
-                            onChange={(e) => {
-                                const file = e.target.files[0];
-                                if (file) {
-                                    const reader = new FileReader();
-                                    reader.onload = (e) => updateSection(section.id, { imageUrl: e.target.result });
-                                    reader.readAsDataURL(file);
-                                }
-                            }}
-                        />
-                        <Upload className="mx-auto mb-2" style={{ color: '#666' }} size={32} />
-                        <p className="text-sm" style={{ color: '#666' }}>
-                            <span className="font-medium" style={{ color: '#F3CB23' }}>Cliquez pour sélectionner</span> une image
-                        </p>
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        <img
-                            src={section.imageUrl}
-                            alt="Image de section"
-                            className="w-full h-48 object-cover rounded-lg"
-                        />
-                        <div className="flex items-center space-x-2">
-                            <input
-                                type="text"
-                                placeholder="URL de l'image"
-                                value={section.imageUrl}
-                                onChange={(e) => updateSection(section.id, { imageUrl: e.target.value })}
-                                className="flex-1 px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-opacity-50"
-                                style={{ borderColor: '#ddd', '--tw-ring-color': '#F3CB23' }}
-                            />
-                            <button
-                                onClick={() => updateSection(section.id, { imageUrl: '' })}
-                                className="px-3 py-2 text-sm rounded hover:bg-red-50"
-                                style={{ color: '#dc2626' }}
-                            >
-                                Supprimer
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                <input
-                    type="text"
-                    placeholder="Légende de l'image (optionnel)"
-                    value={section.caption}
-                    onChange={(e) => updateSection(section.id, { caption: e.target.value })}
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-opacity-50"
-                    style={{ borderColor: '#ddd', '--tw-ring-color': '#F3CB23' }}
-                />
-            </div>
-        </div>
-    );
-
-    // Composant section vidéo
-    const VideoSection = ({ section }) => (
-        <div className="border rounded-lg overflow-hidden" style={{ borderColor: '#e0e0e0' }}>
-            <div className="flex items-center justify-between p-3" style={{ backgroundColor: '#ECF3F0' }}>
-                <div className="flex items-center space-x-2">
-                    <Video size={16} style={{ color: '#F3CB23' }} />
-                    <span className="text-sm font-medium" style={{ color: '#1c2a28' }}>Vidéo</span>
-                </div>
-                <SectionControls sectionId={section.id} />
-            </div>
-
-            <div className="p-4 space-y-4">
-                <input
-                    type="url"
-                    placeholder="URL de la vidéo (YouTube, Vimeo...)"
-                    value={section.videoUrl}
-                    onChange={(e) => updateSection(section.id, { videoUrl: e.target.value })}
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-opacity-50"
-                    style={{ borderColor: '#ddd', '--tw-ring-color': '#F3CB23' }}
-                />
-
-                {section.videoUrl && (
-                    <div className="bg-gray-100 rounded-lg p-8 text-center">
-                        <Play className="mx-auto mb-2" style={{ color: '#666' }} size={32} />
-                        <p className="text-sm" style={{ color: '#666' }}>Aperçu vidéo</p>
-                        <p className="text-xs mt-1" style={{ color: '#999' }}>{section.videoUrl}</p>
-                    </div>
-                )}
-
-                <input
-                    type="text"
-                    placeholder="Titre de la vidéo (optionnel)"
-                    value={section.title}
-                    onChange={(e) => updateSection(section.id, { title: e.target.value })}
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-opacity-50"
-                    style={{ borderColor: '#ddd', '--tw-ring-color': '#F3CB23' }}
-                />
-            </div>
-        </div>
-    );
-
-    // Contrôles de section (déplacer, supprimer)
-    const SectionControls = ({ sectionId }) => (
-        <div className="flex items-center space-x-1">
-            <button
-                onClick={() => moveSection(sectionId, 'up')}
-                className="p-1 rounded hover:bg-white transition-colors"
-                title="Déplacer vers le haut"
-            >
-                <Move size={14} style={{ color: '#666', transform: 'rotate(-90deg)' }} />
-            </button>
-            <button
-                onClick={() => moveSection(sectionId, 'down')}
-                className="p-1 rounded hover:bg-white transition-colors"
-                title="Déplacer vers le bas"
-            >
-                <Move size={14} style={{ color: '#666', transform: 'rotate(90deg)' }} />
-            </button>
-            <button
-                onClick={() => removeSection(sectionId)}
-                className="p-1 rounded hover:bg-red-50 transition-colors"
-                title="Supprimer"
-            >
-                <Trash2 size={14} style={{ color: '#dc2626' }} />
-            </button>
-        </div>
-    );
-
-    // Sauvegarde du contenu
-    const handleSave = async () => {
-        setLoading(true);
-        try {
-            // Simulation de l'appel API
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            const pageData = {
-                country_id: countryData.id,
-                sections: sections.map((section, index) => ({
-                    ...section,
-                    order: index,
-                    type: section.type,
-                    content: section.content,
-                    title: section.title,
-                    image_url: section.imageUrl,
-                    video_url: section.videoUrl,
-                    caption: section.caption
-                }))
-            };
-
-            console.log('Données à sauvegarder:', pageData);
-            alert('Page pays sauvegardée avec succès !');
-
-        } catch (error) {
-            console.error('Erreur:', error);
-            alert('Erreur lors de la sauvegarde');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Rendu d'une section selon son type
-    const renderSection = (section) => {
-        switch (section.type) {
-            case 'text':
-                return <TextSection key={section.id} section={section} />;
-            case 'image':
-                return <ImageSection key={section.id} section={section} />;
-            case 'video':
-                return <VideoSection key={section.id} section={section} />;
-            default:
-                return null;
-        }
-    };
-
-    // Mode prévisualisation
-    const PreviewMode = () => (
-        <div className="max-w-4xl mx-auto">
-            {/* En-tête du pays */}
-            <div className="relative mb-8">
-                <img
-                    src={countryData.image}
-                    alt={countryData.name}
-                    className="w-full h-64 object-cover rounded-lg"
-                />
-                <div className="absolute inset-0 flex items-end rounded-lg" style={{ backgroundColor: 'rgba(28, 42, 40, 0.6)' }}>
-                    <div className="text-white p-6 w-full">
-                        <h1 className="text-3xl font-bold mb-3">{countryData.name}</h1>
-                        <p className="text-lg opacity-90">{countryData.description}</p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Contenu des sections */}
-            <div className="space-y-8">
-                {sections.map((section, index) => (
-                    <div key={section.id} className="prose max-w-none">
-                        {section.type === 'text' && (
-                            <div>
-                                {section.title && <h2 className="text-2xl font-bold mb-4" style={{ color: '#1c2a28' }}>{section.title}</h2>}
-                                <div
-                                    dangerouslySetInnerHTML={{ __html: section.content }}
-                                    style={{ color: '#1c2a28' }}
-                                />
-                            </div>
-                        )}
-
-                        {section.type === 'image' && section.imageUrl && (
-                            <div className="text-center">
-                                <img
-                                    src={section.imageUrl}
-                                    alt="Image de contenu"
-                                    className="w-full max-w-2xl mx-auto rounded-lg shadow-sm"
-                                />
-                                {section.caption && (
-                                    <p className="text-sm mt-2 italic" style={{ color: '#666' }}>{section.caption}</p>
-                                )}
-                            </div>
-                        )}
-
-                        {section.type === 'video' && section.videoUrl && (
-                            <div className="text-center">
-                                {section.title && <h3 className="text-xl font-semibold mb-4" style={{ color: '#1c2a28' }}>{section.title}</h3>}
-                                <div className="bg-gray-100 rounded-lg p-12">
-                                    <Play className="mx-auto mb-4" style={{ color: '#F3CB23' }} size={48} />
-                                    <p className="text-lg font-medium" style={{ color: '#1c2a28' }}>Vidéo intégrée</p>
-                                    <p className="text-sm mt-2" style={{ color: '#666' }}>{section.videoUrl}</p>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
 
     return (
         <div className="min-h-screen" style={{ backgroundColor: '#ECF3F0' }}>
@@ -426,96 +400,218 @@ const CountryContent = () => {
                         <div className="flex items-center space-x-4">
                             <div className="flex items-center space-x-2">
                                 <Globe style={{ color: '#F3CB23' }} size={24} />
-                                <div>
-                                    <h1 className="text-xl font-semibold" style={{ color: '#1c2a28' }}>
-                                        Éditeur de contenu - {countryData.name}
-                                    </h1>
-                                    <p className="text-sm" style={{ color: '#666' }}>
-                                        Ajoutez et organisez le contenu de la page pays
-                                    </p>
-                                </div>
+                                <h1 className="text-xl font-semibold" style={{ color: '#1c2a28' }}>
+                                    Éditeur de contenu - {countryData?.name || 'Pays'}
+                                </h1>
+                            </div>
+                            <div className="flex items-center space-x-2 text-sm" style={{ color: '#666' }}>
+                                <span className="px-2 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: '#e0e0e0', color: '#666' }}>1</span>
+                                <span>Informations de base</span>
+                                <ArrowRight size={16} style={{ color: '#ccc' }} />
+                                <span className="text-white px-2 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: '#F3CB23' }}>2</span>
+                                <span>Éditeur de contenu</span>
                             </div>
                         </div>
 
                         <div className="flex items-center space-x-3">
                             <button
-                                onClick={() => setPreviewMode(!previewMode)}
-                                className="flex items-center space-x-2 px-4 py-2 border rounded-lg hover:opacity-70 transition-opacity"
+                                onClick={() => setShowPreview(!showPreview)}
+                                className="px-3 py-2 text-sm border rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
                                 style={{ color: '#1c2a28', borderColor: '#ddd' }}
                             >
                                 <Eye size={16} />
-                                <span>{previewMode ? 'Retour à l\'éditeur' : 'Aperçu'}</span>
-                            </button>
-
-                            <button
-                                onClick={handleSave}
-                                disabled={loading}
-                                className="flex items-center space-x-2 px-4 py-2 text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-all"
-                                style={{ backgroundColor: '#F3CB23' }}
-                            >
-                                {loading ? (
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                ) : (
-                                    <Save size={16} />
-                                )}
-                                <span>{loading ? 'Sauvegarde...' : 'Sauvegarder'}</span>
+                                <span>{showPreview ? 'Éditeur' : 'Aperçu'}</span>
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
 
+            {/* Contenu principal */}
             <div className="max-w-6xl mx-auto px-6 py-8">
-                {previewMode ? (
-                    <PreviewMode />
-                ) : (
-                    <div className="grid grid-cols-12 gap-6">
-                        {/* Panneau d'ajout de sections */}
-                        <div className="col-span-3">
-                            <div className="bg-white rounded-lg shadow-sm border sticky top-6" style={{ borderColor: '#e0e0e0' }}>
-                                <div className="p-4 border-b" style={{ borderColor: '#e0e0e0' }}>
-                                    <h3 className="font-medium" style={{ color: '#1c2a28' }}>Ajouter une section</h3>
-                                    <p className="text-xs mt-1" style={{ color: '#666' }}>
-                                        Cliquez pour ajouter du contenu
-                                    </p>
-                                </div>
-                                <div className="p-4 space-y-3">
-                                    {sectionTypes.map(type => (
-                                        <button
-                                            key={type.id}
-                                            onClick={() => addSection(type.id)}
-                                            className="w-full p-3 border rounded-lg hover:border-opacity-70 transition-all text-left"
-                                            style={{ borderColor: '#F3CB23' }}
-                                        >
-                                            <div className="flex items-center space-x-3">
-                                                <type.icon size={20} style={{ color: '#F3CB23' }} />
-                                                <div>
-                                                    <p className="text-sm font-medium" style={{ color: '#1c2a28' }}>{type.name}</p>
-                                                    <p className="text-xs" style={{ color: '#666' }}>{type.description}</p>
-                                                </div>
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+                    {/* Panel principal */}
+                    <div className="lg:col-span-3 space-y-6">
+                        {errors.general && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                                <p className="text-sm text-red-600">{errors.general}</p>
+                            </div>
+                        )}
+
+                        {/* En-tête informatif */}
+                        <div className="bg-white rounded-lg p-4 border" style={{ borderColor: '#e0e0e0' }}>
+                            <h2 className="text-lg font-medium mb-2" style={{ color: '#1c2a28' }}>
+                                Ajoutez le contenu de votre pays
+                            </h2>
+                            <p className="text-sm" style={{ color: '#666' }}>
+                                Créez des sections pour présenter l'histoire, la culture, la géographie et tout ce qui rend ce pays unique.
+                            </p>
+                        </div>
+
+                        {/* Sections */}
+                        {sections.map((section, index) => renderSectionEditor(section, index))}
+
+                        {/* Boutons d'ajout */}
+                        <div className="flex flex-wrap gap-3">
+                            {sectionTypes.map(type => {
+                                const Icon = type.icon;
+                                return (
+                                    <button
+                                        key={type.id}
+                                        onClick={() => addSection(type.id)}
+                                        className="flex items-center space-x-2 px-4 py-2 border-2 border-dashed rounded-lg hover:border-solid transition-all"
+                                        style={{ borderColor: '#F3CB23', color: '#1c2a28' }}
+                                    >
+                                        <Icon size={16} />
+                                        <span>Ajouter {type.label}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Sidebar */}
+                    <div className="space-y-4">
+                        {/* Actions */}
+                        <div className="bg-white rounded-lg p-4 border" style={{ borderColor: '#e0e0e0' }}>
+                            <h3 className="font-medium mb-4" style={{ color: '#1c2a28' }}>Actions</h3>
+
+                            <div className="space-y-3">
+                                <button
+                                    onClick={handleSave}
+                                    disabled={isUpdating || sections.length === 0}
+                                    className="w-full px-4 py-2 text-white rounded-lg font-medium transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+                                    style={{ backgroundColor: '#F3CB23' }}
+                                >
+                                    {isUpdating ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                                            <span>Enregistrement...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save size={16} />
+                                            <span>Enregistrer</span>
+                                        </>
+                                    )}
+                                </button>
+
+                                <button
+                                    onClick={() => navigate('/Dashboard')}
+                                    className="w-full px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
+                                    style={{ color: '#1c2a28', borderColor: '#ddd' }}
+                                    disabled={isUpdating}
+                                >
+                                    Annuler
+                                </button>
                             </div>
                         </div>
 
-                        {/* Zone d'édition */}
-                        <div className="col-span-9">
-                            <div className="space-y-6">
-                                {sections.length === 0 ? (
-                                    <div className="bg-white rounded-lg border-2 border-dashed p-12 text-center" style={{ borderColor: '#F3CB23' }}>
-                                        <Plus className="mx-auto mb-4" size={48} style={{ color: '#F3CB23' }} />
-                                        <h3 className="text-lg font-medium mb-2" style={{ color: '#1c2a28' }}>
-                                            Commencez à créer votre contenu
-                                        </h3>
-                                        <p className="text-sm" style={{ color: '#666' }}>
-                                            Utilisez le panneau de gauche pour ajouter des sections de texte, images ou vidéos
-                                        </p>
+                        {/* Informations du pays */}
+                        {countryData && (
+                            <div className="bg-white rounded-lg p-4 border" style={{ borderColor: '#e0e0e0' }}>
+                                <h3 className="font-medium mb-3" style={{ color: '#1c2a28' }}>Informations du pays</h3>
+
+                                <div className="space-y-2 text-sm">
+                                    <div>
+                                        <span className="font-medium">Nom:</span> {countryData.name}
                                     </div>
-                                ) : (
-                                    sections.map(renderSection)
-                                )}
+                                    <div>
+                                        <span className="font-medium">Code:</span> {countryData.code}
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">Sections:</span> {sections.length}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Conseils */}
+                        <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                            <h4 className="font-medium text-blue-800 mb-2">💡 Conseils</h4>
+                            <ul className="text-sm text-blue-700 space-y-1">
+                                <li>• Utilisez des titres clairs et informatifs</li>
+                                <li>• Alternez texte et images pour plus d'engagement</li>
+                                <li>• Les sections peuvent être réorganisées</li>
+                                <li>• Les images doivent être en haute qualité</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Aperçu modal */}
+                {showPreview && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
+                            <div className="flex items-center justify-between p-4 border-b">
+                                <h3 className="text-lg font-medium" style={{ color: '#1c2a28' }}>
+                                    Aperçu - {countryData?.name}
+                                </h3>
+                                <button
+                                    onClick={() => setShowPreview(false)}
+                                    className="text-gray-500 hover:text-gray-700"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+
+                            <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+                                {/* En-tête du pays */}
+                                <div className="mb-6">
+                                    <h1 className="text-3xl font-bold mb-4" style={{ color: '#1c2a28' }}>
+                                        {countryData?.name}
+                                    </h1>
+                                    <p className="text-gray-600">
+                                        {countryData?.description}
+                                    </p>
+                                </div>
+
+                                {/* Sections */}
+                                <div className="space-y-8">
+                                    {sections.map((section, index) => (
+                                        <div key={section.id}>
+                                            {section.title && (
+                                                <h2 className="text-xl font-semibold mb-4" style={{ color: '#1c2a28' }}>
+                                                    {section.title}
+                                                </h2>
+                                            )}
+
+                                            {section.type === 'text' && section.content && (
+                                                <div className="prose max-w-none">
+                                                    <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                                                        {section.content}
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {section.type === 'image' && section.imageUrl && (
+                                                <div>
+                                                    <img
+                                                        src={section.imageUrl}
+                                                        alt={section.title}
+                                                        className="w-full rounded-lg shadow-sm"
+                                                    />
+                                                    {section.content && (
+                                                        <p className="text-sm text-gray-600 mt-2 italic">
+                                                            {section.content}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {section.type === 'video' && section.content && (
+                                                <div className="aspect-video">
+                                                    <iframe
+                                                        src={section.content}
+                                                        className="w-full h-full rounded-lg"
+                                                        allowFullScreen
+                                                    ></iframe>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>

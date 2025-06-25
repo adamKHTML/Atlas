@@ -1,27 +1,87 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { selectUser, selectIsAdmin, selectIsAuthenticated } from '../store/slices/authSlice';
 import { useLogoutMutation } from '../api/endpoints/auth';
+import { useGetCountriesForDashboardQuery } from '../api/endpoints/countries';
 
 const Dashboard = () => {
     const user = useSelector(selectUser);
     const isAuthenticated = useSelector(selectIsAuthenticated);
     const isAdmin = useSelector(selectIsAdmin);
     const navigate = useNavigate();
-    const dispatch = useDispatch();
     const [logout] = useLogoutMutation();
 
-    // Données statiques pour le dashboard
-    const userData = {
-        recentActivity: [
-            { id: 1, title: 'Voyage au Maroc', date: '15 avril 2025', category: 'TRAVELS' },
-            { id: 2, title: 'Recette de tajine', date: '2 avril 2025', category: 'COOKING' },
-            { id: 3, title: 'Méditation du matin', date: '28 mars 2025', category: 'INSPIRE' },
-        ],
-        savedArticles: 12,
-        followers: 28
-    };
+    // 🌍 Récupérer la liste des pays avec images
+    const {
+        data: countriesData,
+        isLoading: countriesLoading,
+        error: countriesError
+    } = useGetCountriesForDashboardQuery();
+
+    // Actions admin
+    const adminActions = [
+        {
+            title: "Créer un pays",
+            description: "Ajouter un nouveau pays à l'atlas",
+            link: "/country-form",
+            icon: "🌍",
+            color: "#10B981"
+        },
+        {
+            title: "Gérer les pays",
+            description: "Modifier ou supprimer des pays existants",
+            link: "/admin/countries",
+            icon: "✏️",
+            color: "#3B82F6"
+        },
+        {
+            title: "Gestion utilisateurs",
+            description: "Administrer les comptes utilisateurs",
+            link: "/admin/user-management",
+            icon: "👥",
+            color: "#8B5CF6"
+        },
+        {
+            title: "Analytics",
+            description: "Analyser les données et statistiques",
+            link: "/admin/analytics",
+            icon: "📊",
+            color: "#F59E0B"
+        }
+    ];
+
+    // Actions voyageur
+    const travelerActions = [
+        {
+            title: "Mes Topics/Questions",
+            description: "Voir et gérer mes discussions",
+            link: "/my-topics",
+            icon: "💬",
+            color: "#10B981"
+        },
+        {
+            title: "Pages à consulter",
+            description: "Découvrir de nouveaux pays",
+            link: "/countries",
+            icon: "📖",
+            color: "#3B82F6"
+        },
+        {
+            title: "Mon profil",
+            description: "Gérer mes informations personnelles",
+            link: "/profile",
+            icon: "👤",
+            color: "#8B5CF6"
+        },
+        {
+            title: "Favoris",
+            description: "Mes articles et pays favoris",
+            link: "/favorites",
+            icon: "❤️",
+            color: "#F59E0B"
+        }
+    ];
 
     // Vérifier l'authentification
     useEffect(() => {
@@ -38,6 +98,130 @@ const Dashboard = () => {
         } catch (error) {
             console.error('Erreur lors de la déconnexion:', error);
         }
+    };
+
+    const handleActionClick = (link) => {
+        navigate(link);
+    };
+
+    const handleCountryClick = (countryId) => {
+        navigate(`/country/${countryId}`);
+    };
+
+    // 🆕 COMPOSANT CARTE STYLE COMPACT ET CORRIGÉ
+    const CountryCard = ({ country }) => {
+        // 🔧 CORRECTION FINALE : URL complète avec serveur backend
+        const getCountryImage = () => {
+            if (country.country_image) {
+                // ✅ Ajouter l'URL du backend Symfony (port 8000)
+                return `http://localhost:8000${country.country_image}`;
+            }
+            return country.flag_url;
+        };
+
+        return (
+            <div
+                onClick={() => handleCountryClick(country.id)}
+                style={{
+                    position: 'relative',
+                    width: '40%',
+                    height: '200px', // 🔧 Encore plus compact (220px → 200px)
+                    borderRadius: '16px', // 🔧 Coins plus subtils
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+                    boxShadow: '0 3px 12px rgba(0,0,0,0.08)', // 🔧 Ombre plus douce
+                    background: 'linear-gradient(135deg, #4a5c52 0%, #2d3d32 100%)'
+                }}
+                onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-3px)'; // 🔧 Mouvement plus subtil
+                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)';
+                }}
+                onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 3px 12px rgba(0,0,0,0.08)';
+                }}
+            >
+                {/* 🆕 Titre en haut sur le fond vert */}
+                <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    padding: '12px 16px', // 🔧 Padding encore plus compact
+                    zIndex: 2
+                }}>
+                    <h3 style={{
+                        fontSize: '22px', // 🔧 Police réduite (24px → 22px)
+                        fontWeight: '300',
+                        margin: 0,
+                        color: 'white',
+                        fontFamily: 'Georgia, serif',
+                        textShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                    }}>
+                        {country.name}
+                    </h3>
+                </div>
+
+                {/* 🆕 Image dans la partie inférieure */}
+                <div style={{
+                    position: 'absolute',
+                    bottom: '14px', // 🔧 Marge réduite (16px → 14px)
+                    left: '14px',
+                    right: '14px',
+                    height: '110px', // 🔧 Hauteur image réduite (120px → 110px)
+                    borderRadius: '10px', // 🔧 Coins plus subtils
+                    overflow: 'hidden',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.12)' // 🔧 Ombre plus douce
+                }}>
+                    <img
+                        src={getCountryImage()}
+                        alt={country.name}
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                        }}
+                        onError={(e) => {
+                            // Fallback sur le drapeau en cas d'erreur
+                            console.log('❌ Erreur image pour', country.name, '- URL tentée:', getCountryImage());
+                            e.target.src = country.flag_url;
+                        }}
+                    />
+
+                    {/* Overlay subtil */}
+                    <div style={{
+                        position: 'absolute',
+                        inset: 0,
+                        background: 'linear-gradient(to top, rgba(0,0,0,0.08), transparent)'
+                    }} />
+                </div>
+
+                {/* Badge petit drapeau */}
+                <div style={{
+                    position: 'absolute',
+                    bottom: '20px', // 🔧 Position ajustée
+                    right: '20px',
+                    width: '22px', // 🔧 Plus petit (24px → 22px)
+                    height: '16px', // 🔧 Plus petit (18px → 16px)
+                    borderRadius: '2px',
+                    overflow: 'hidden',
+                    border: '1.5px solid white',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                    zIndex: 3
+                }}>
+                    <img
+                        src={country.flag_url}
+                        alt={`Drapeau ${country.name}`}
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                        }}
+                    />
+                </div>
+            </div>
+        );
     };
 
     // Si l'utilisateur n'est pas chargé, afficher un chargement
@@ -97,102 +281,373 @@ const Dashboard = () => {
                             <div className="title-divider" style={{ width: '60px', margin: '20px auto' }}></div>
                         </div>
 
-                        {/* Ici votre interface d'admin */}
+                        {/* Stats Admin */}
                         <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '50px' }}>
                             <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>125</div>
+                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
+                                    {countriesData?.countries?.length || 0}
+                                </div>
+                                <div>Pays créés</div>
+                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                                    Pays disponibles
+                                </div>
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
+                                    {countriesData?.countries?.reduce((total, country) =>
+                                        total + (country.content_count || 0), 0) || 0}
+                                </div>
+                                <div>Contenus publiés</div>
+                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                                    Sections de contenu
+                                </div>
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
+                                    -
+                                </div>
                                 <div>Utilisateurs</div>
-                            </div>
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>54</div>
-                                <div>Articles publiés</div>
-                            </div>
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>18</div>
-                                <div>Pays couverts</div>
+                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                                    À implémenter
+                                </div>
                             </div>
                         </div>
+
+                        {/* Actions Admin */}
+                        <div className="title-section" style={{ marginBottom: '30px' }}>
+                            <h2 className="main-title">ACTIONS ADMINISTRATEUR</h2>
+                            <div className="title-divider"></div>
+                        </div>
+
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', // 🔧 Largeur réduite (260px → 240px)
+                            gap: '16px', // 🔧 Gap réduit (18px → 16px)
+                            marginBottom: '50px'
+                        }}>
+                            {adminActions.map((action, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => handleActionClick(action.link)}
+                                    style={{
+                                        backgroundColor: 'white',
+                                        border: '1px solid #e0e0e0',
+                                        borderRadius: '8px',
+                                        padding: '20px', // 🔧 Padding réduit (24px → 20px)
+                                        textAlign: 'left',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-3px)'; // 🔧 Mouvement réduit
+                                        e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                                    }}
+                                >
+                                    <div style={{
+                                        width: '44px', // 🔧 Taille icône réduite (48px → 44px)
+                                        height: '44px',
+                                        backgroundColor: action.color,
+                                        borderRadius: '8px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '22px', // 🔧 Icône plus petite (24px → 22px)
+                                        marginBottom: '14px' // 🔧 Marge réduite (16px → 14px)
+                                    }}>
+                                        {action.icon}
+                                    </div>
+                                    <h4 style={{
+                                        fontSize: '15px', // 🔧 Font réduite (16px → 15px)
+                                        fontWeight: 'bold',
+                                        color: '#2E3830',
+                                        margin: '0 0 6px 0' // 🔧 Marge réduite (8px → 6px)
+                                    }}>
+                                        {action.title}
+                                    </h4>
+                                    <p style={{
+                                        fontSize: '13px', // 🔧 Font réduite (14px → 13px)
+                                        color: '#666',
+                                        margin: '0'
+                                    }}>
+                                        {action.description}
+                                    </p>
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* 🆕 Section Pays - CARTES COMPACTES */}
+                        <div className="title-section">
+                            <h2 className="main-title">PAYS DISPONIBLES</h2>
+                            <div className="title-divider"></div>
+                        </div>
+
+                        {countriesLoading ? (
+                            <div style={{
+                                textAlign: 'center',
+                                padding: '40px',
+                                color: '#666'
+                            }}>
+                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
+                                <p>Chargement des pays...</p>
+                            </div>
+                        ) : countriesError ? (
+                            <div style={{
+                                textAlign: 'center',
+                                padding: '40px',
+                                color: '#666',
+                                backgroundColor: '#fee2e2',
+                                borderRadius: '8px',
+                                border: '2px dashed #ef4444'
+                            }}>
+                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
+                                <p style={{ color: '#ef4444' }}>
+                                    Erreur lors du chargement des pays
+                                </p>
+                                <p style={{ fontSize: '14px', color: '#999', marginTop: '10px' }}>
+                                    {countriesError.message || 'Erreur inconnue'}
+                                </p>
+                            </div>
+                        ) : countriesData?.countries?.length > 0 ? (
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', // 🔧 Largeur réduite
+                                gap: '16px', // 🔧 Gap réduit
+                                marginBottom: '40px'
+                            }}>
+                                {countriesData.countries.map((country) => (
+                                    <CountryCard key={country.id} country={country} />
+                                ))}
+                            </div>
+                        ) : (
+                            <div style={{
+                                textAlign: 'center',
+                                padding: '40px',
+                                color: '#666',
+                                backgroundColor: '#f8f9fa',
+                                borderRadius: '8px',
+                                border: '2px dashed #ddd'
+                            }}>
+                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌍</div>
+                                <p style={{ marginBottom: '20px' }}>
+                                    Aucun pays créé pour le moment
+                                </p>
+                                <button
+                                    onClick={() => handleActionClick('/country-form')}
+                                    style={{
+                                        backgroundColor: '#F3CB23',
+                                        color: '#2E3830',
+                                        border: 'none',
+                                        borderRadius: '25px',
+                                        padding: '12px 24px',
+                                        cursor: 'pointer',
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    ✦ Créer le premier pays
+                                </button>
+                            </div>
+                        )}
                     </div>
                 ) : (
-                    // Contenu voyageur (votre Dashboard existant)
+                    // Contenu voyageur - MÊME STYLE COMPACT
                     <div className="featured-container" style={{ backgroundColor: 'white', padding: '30px' }}>
                         <div className="title-section" style={{ textAlign: 'center', marginBottom: '40px' }}>
                             <h2 className="main-title">TABLEAU DE BORD</h2>
                             <div className="title-divider" style={{ width: '60px', margin: '20px auto' }}></div>
                         </div>
 
+                        {/* Stats Voyageur */}
                         <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '50px' }}>
                             <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>{userData.savedArticles}</div>
-                                <div>Articles sauvegardés</div>
+                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>-</div>
+                                <div>Commentaires</div>
+                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                                    À implémenter
+                                </div>
                             </div>
                             <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>{userData.followers}</div>
-                                <div>Abonnés</div>
+                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>-</div>
+                                <div>Likes</div>
+                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                                    À implémenter
+                                </div>
                             </div>
                             <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>7</div>
-                                <div>Jours consécutifs</div>
+                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
+                                    {countriesData?.countries?.length || 0}
+                                </div>
+                                <div>Pays disponibles</div>
+                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                                    À découvrir
+                                </div>
                             </div>
                         </div>
 
-                        {/* Recent Activity */}
-                        <div className="title-section">
-                            <h2 className="main-title">ACTIVITÉ RÉCENTE</h2>
+                        {/* Actions Voyageur */}
+                        <div className="title-section" style={{ marginBottom: '30px' }}>
+                            <h2 className="main-title">MES ACTIONS</h2>
                             <div className="title-divider"></div>
                         </div>
 
-                        <div className="gallery-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-                            {userData.recentActivity.map(activity => (
-                                <div key={activity.id} className="gallery-item" style={{
-                                    height: '240px',
-                                    position: 'relative',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    justifyContent: 'flex-end',
-                                    alignItems: 'flex-start',
-                                    padding: '20px',
-                                    backgroundColor: '#e0e0e0',
-                                    color: 'white',
-                                    backgroundImage: `linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.6)), url("/api/placeholder/400/320")`,
-                                    backgroundSize: 'cover',
-                                    borderRadius: '8px'
-                                }}>
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', // 🔧 Largeur réduite
+                            gap: '16px', // 🔧 Gap réduit
+                            marginBottom: '50px'
+                        }}>
+                            {travelerActions.map((action, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => handleActionClick(action.link)}
+                                    style={{
+                                        backgroundColor: 'white',
+                                        border: '1px solid #e0e0e0',
+                                        borderRadius: '8px',
+                                        padding: '20px', // 🔧 Padding réduit
+                                        textAlign: 'left',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-3px)';
+                                        e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                                    }}
+                                >
                                     <div style={{
-                                        backgroundColor: '#F3CB23',
-                                        color: '#1c2a28',
-                                        padding: '4px 10px',
-                                        borderRadius: '20px',
-                                        fontSize: '12px',
-                                        marginBottom: '10px'
+                                        width: '44px', // 🔧 Taille réduite
+                                        height: '44px',
+                                        backgroundColor: action.color,
+                                        borderRadius: '8px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '22px', // 🔧 Icône plus petite
+                                        marginBottom: '14px'
                                     }}>
-                                        {activity.category}
+                                        {action.icon}
                                     </div>
-                                    <h3 style={{ margin: '0 0 5px 0', fontSize: '20px' }}>{activity.title}</h3>
-                                    <p style={{ margin: '0', fontSize: '14px' }}>{activity.date}</p>
-                                </div>
+                                    <h4 style={{
+                                        fontSize: '15px', // 🔧 Font réduite
+                                        fontWeight: 'bold',
+                                        color: '#2E3830',
+                                        margin: '0 0 6px 0'
+                                    }}>
+                                        {action.title}
+                                    </h4>
+                                    <p style={{
+                                        fontSize: '13px', // 🔧 Font réduite
+                                        color: '#666',
+                                        margin: '0'
+                                    }}>
+                                        {action.description}
+                                    </p>
+                                </button>
                             ))}
                         </div>
 
-                        {/* Suggestions Section */}
-                        <div className="title-section" style={{ marginTop: '50px' }}>
-                            <h2 className="main-title">SUGGESTIONS POUR VOUS</h2>
+                        {/* Section Pays pour Voyageurs */}
+                        <div className="title-section">
+                            <h2 className="main-title">PAYS À DÉCOUVRIR</h2>
                             <div className="title-divider"></div>
                         </div>
 
-                        <div className="featured-grid" style={{
-                            height: 'auto',
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(3, 1fr)',
-                            gap: '20px',
-                            margin: '0 auto 50px'
-                        }}>
-                            {/* Suggestions grid items here */}
-                            {/* ... */}
-                        </div>
+                        {countriesLoading ? (
+                            <div style={{
+                                textAlign: 'center',
+                                padding: '40px',
+                                color: '#666'
+                            }}>
+                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
+                                <p>Chargement des pays...</p>
+                            </div>
+                        ) : countriesError ? (
+                            <div style={{
+                                textAlign: 'center',
+                                padding: '40px',
+                                color: '#666',
+                                backgroundColor: '#fee2e2',
+                                borderRadius: '8px',
+                                border: '2px dashed #ef4444'
+                            }}>
+                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
+                                <p style={{ color: '#ef4444' }}>
+                                    Erreur lors du chargement des pays
+                                </p>
+                            </div>
+                        ) : countriesData?.countries?.length > 0 ? (
+                            <>
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', // 🔧 Largeur réduite
+                                    gap: '16px', // 🔧 Gap réduit
+                                    marginBottom: '40px'
+                                }}>
+                                    {countriesData.countries.slice(0, 6).map((country) => (
+                                        <CountryCard key={country.id} country={country} />
+                                    ))}
+                                </div>
+
+                                {/* Bouton voir plus */}
+                                {countriesData.countries.length > 6 && (
+                                    <div style={{ textAlign: 'center', marginTop: '30px' }}>
+                                        <button
+                                            onClick={() => handleActionClick('/countries')}
+                                            style={{
+                                                backgroundColor: 'transparent',
+                                                color: '#2E3830',
+                                                border: '1px dashed #2E3830',
+                                                borderRadius: '25px',
+                                                padding: '12px 24px',
+                                                cursor: 'pointer',
+                                                fontWeight: 'bold',
+                                                transition: 'all 0.3s ease'
+                                            }}
+                                            onMouseOver={(e) => {
+                                                e.currentTarget.style.backgroundColor = '#F3CB23';
+                                                e.currentTarget.style.borderColor = '#F3CB23';
+                                            }}
+                                            onMouseOut={(e) => {
+                                                e.currentTarget.style.backgroundColor = 'transparent';
+                                                e.currentTarget.style.borderColor = '#2E3830';
+                                            }}
+                                        >
+                                            ✦ Voir tous les pays ({countriesData.countries.length})
+                                        </button>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div style={{
+                                textAlign: 'center',
+                                padding: '40px',
+                                color: '#666',
+                                backgroundColor: '#f8f9fa',
+                                borderRadius: '8px',
+                                border: '2px dashed #ddd'
+                            }}>
+                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌍</div>
+                                <p style={{ marginBottom: '20px' }}>
+                                    Aucun pays disponible pour le moment
+                                </p>
+                                <p style={{ fontSize: '14px', color: '#999' }}>
+                                    Revenez bientôt pour découvrir de nouveaux contenus !
+                                </p>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
+
             {/* Contact Footer */}
             <div className="contact-footer">
                 <h2 className="footer-heading">Contact</h2>

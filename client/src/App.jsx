@@ -10,6 +10,8 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import VerifyEmail from './pages/VerifyEmail';
 import CountryForm from './features/country/administration/CountryForm';
+import CountryContent from './features/country/administration/CountryContent'; // ✅ Ajout
+import CountryPage from './pages/CountryPage';
 
 function App() {
   return (
@@ -22,6 +24,8 @@ function App() {
           <Route path='/Dashboard' element={<Dashboard />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path='/country-form' element={<CountryForm />} />
+          <Route path='/country-content/:countryId' element={<CountryContent />} /> {/* ✅ Nouvelle route */}
+          <Route path='/country/:countryId' element={<CountryPage />} />
         </Routes>
       </Router>
     </Provider>
