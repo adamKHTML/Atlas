@@ -1,19 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Globe, ShoppingCart, Share2, Bookmark, ArrowLeft } from 'lucide-react';
+import { Globe, ShoppingCart, Share2, Bookmark, ArrowLeft, Edit, Trash2 } from 'lucide-react';
 import { useGetCountryWithContentQuery } from '../api/endpoints/countries';
+import { useDeleteCountryMutation } from '../api/endpoints/admin/countries';
+import { useSelector } from 'react-redux';
 
 const CountryPage = () => {
     const { countryId } = useParams();
     const navigate = useNavigate();
     const [scrollY, setScrollY] = useState(0);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-    // RTK Query hook pour récupérer les données complètes du pays
+    // Récupération du rôle utilisateur depuis Redux
+    const userRole = useSelector(state => state.auth?.user?.roles);
+    const isAdmin = userRole && userRole.includes('ROLE_ADMIN');
+
+    // RTK Query hooks
     const {
         data: countryData,
         isLoading,
         error
     } = useGetCountryWithContentQuery(countryId);
+
+    const [deleteCountry, { isLoading: isDeleting }] = useDeleteCountryMutation();
 
     // Effet de parallax pour l'image hero
     useEffect(() => {
@@ -33,15 +42,36 @@ const CountryPage = () => {
         }
     };
 
-    // Fonction pour scroller vers la galerie/topics
-    const scrollToTopics = () => {
-        const contentSection = document.querySelector('[data-content-section]');
-        if (contentSection) {
-            contentSection.scrollIntoView({
-                behavior: 'smooth',
-                block: 'start'
+    const scrollToForum = () => {
+        navigate(`/country/${countryId}/discussions`); // ✅ Correction: utilise countryId au lieu de l'ID fixe
+    };
+
+    // Fonction pour modifier le pays
+    const handleEdit = () => {
+        navigate(`/country-edit/${countryId}`, {
+            state: {
+                countryData: countryData
+            }
+        });
+    };
+
+    // Fonction pour supprimer le pays
+    const handleDelete = async () => {
+        try {
+            await deleteCountry(countryId).unwrap();
+
+            // Redirection vers le dashboard avec message de succès
+            navigate('/Dashboard', {
+                state: {
+                    message: `Le pays "${countryData.name}" a été supprimé avec succès`,
+                    type: 'success'
+                }
             });
+        } catch (error) {
+            console.error('❌ Erreur lors de la suppression:', error);
+            alert('Erreur lors de la suppression du pays. Veuillez réessayer.');
         }
+        setShowDeleteModal(false);
     };
 
     if (isLoading) {
@@ -245,6 +275,29 @@ const CountryPage = () => {
                         </div>
 
                         <div className="flex items-center space-x-6">
+                            {/* 🆕 Boutons d'administration (visible seulement pour les admins) */}
+                            {isAdmin && (
+                                <>
+                                    <button
+                                        onClick={handleEdit}
+                                        className="flex items-center space-x-2 text-white hover:text-yellow-400 transition-colors"
+                                        title="Modifier le pays"
+                                    >
+                                        <Edit size={20} />
+                                        <span>Modifier</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setShowDeleteModal(true)}
+                                        className="flex items-center space-x-2 text-white hover:text-red-400 transition-colors"
+                                        title="Supprimer le pays"
+                                    >
+                                        <Trash2 size={20} />
+                                        <span>Supprimer</span>
+                                    </button>
+                                    <span className="text-white">|</span>
+                                </>
+                            )}
+
                             <ShoppingCart size={20} className="text-white hover:text-yellow-400 cursor-pointer transition-colors" />
                             <span className="text-white">|</span>
                             <button
@@ -268,7 +321,7 @@ const CountryPage = () => {
                     </div>
                 </nav>
 
-                {/* 🎯 Container principal avec nouveau layout */}
+                {/* 🎯 Container principal avec layout */}
                 <div className="relative h-full flex flex-col justify-center px-8 pt-20">
                     <div className="max-w-7xl mx-auto w-full">
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
@@ -288,7 +341,7 @@ const CountryPage = () => {
                                     </p>
                                 </div>
 
-                                {/* Nom du pays - TAILLE RÉDUITE */}
+                                {/* Nom du pays */}
                                 <div className="mt-32">
                                     <h1
                                         className="text-4xl lg:text-5xl xl:text-6xl font-light text-white leading-[0.8] mb-12"
@@ -322,7 +375,7 @@ const CountryPage = () => {
                                     transition: 'opacity 0.1s ease-out'
                                 }}
                             >
-                                {/* Description - TAILLE RÉDUITE */}
+                                {/* Description */}
                                 <p
                                     className="text-white text-base lg:text-lg leading-relaxed font-light max-w-lg text-right mb-8"
                                     style={{
@@ -334,10 +387,10 @@ const CountryPage = () => {
                                     {countryData.description}
                                 </p>
 
-                                {/* Boutons - REPOSITIONNÉS À GAUCHE EN BAS DE LA DESCRIPTION */}
+                                {/* Boutons */}
                                 <div className="flex space-x-4 center">
                                     <button
-                                        onClick={scrollToTopics}
+                                        onClick={scrollToForum}
                                         className="px-6 py-2 border border-dashed border-white text-white rounded-full hover:bg-white hover:text-gray-800 transition-all duration-300 tracking-wide text-sm"
                                     >
                                         DISCUSSIONS
@@ -363,7 +416,7 @@ const CountryPage = () => {
                     transition: 'transform 0.1s ease-out'
                 }}
             >
-                {/* Container principal arrondi - 92% width - plus haut */}
+                {/* Container principal arrondi - 92% width */}
                 <div className="w-[92%] mx-auto" style={{ marginTop: '-8rem' }}>
                     <div
                         className="rounded-3xl shadow-2xl overflow-hidden"
@@ -371,7 +424,7 @@ const CountryPage = () => {
                             backgroundColor: '#E6EDEA'
                         }}
                     >
-                        {/* Image principale du pays - PLEINE HAUTEUR/LARGEUR */}
+                        {/* Image principale du pays */}
                         <div className="relative h-96 lg:h-[600px] overflow-hidden">
                             <img
                                 src={getCountryImage()}
@@ -419,7 +472,7 @@ const CountryPage = () => {
                     </div>
                 </div>
 
-                {/* Bouton BACK comme sur Uganda */}
+                {/* Bouton BACK */}
                 <div className="text-center py-12">
                     <button
                         onClick={() => navigate('/dashboard')}
@@ -430,6 +483,59 @@ const CountryPage = () => {
                     </button>
                 </div>
             </div>
+
+            {/* 🆕 Modal de confirmation de suppression */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-lg max-w-md w-full p-6">
+                        <div className="flex items-center mb-4">
+                            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mr-4">
+                                <Trash2 className="text-red-600" size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-900">
+                                    Supprimer le pays
+                                </h3>
+                                <p className="text-sm text-gray-600">
+                                    Cette action est irréversible
+                                </p>
+                            </div>
+                        </div>
+
+                        <p className="text-gray-700 mb-6">
+                            Êtes-vous sûr de vouloir supprimer <strong>"{countryData.name}"</strong> ?
+                            <br />
+                            <span className="text-sm text-red-600">
+                                Toutes les sections et le contenu associé seront définitivement supprimés.
+                            </span>
+                        </p>
+
+                        <div className="flex space-x-3">
+                            <button
+                                onClick={() => setShowDeleteModal(false)}
+                                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                                disabled={isDeleting}
+                            >
+                                Annuler
+                            </button>
+                            <button
+                                onClick={handleDelete}
+                                disabled={isDeleting}
+                                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center"
+                            >
+                                {isDeleting ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                                        Suppression...
+                                    </>
+                                ) : (
+                                    'Supprimer définitivement'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Footer simple */}
             <footer className="bg-white border-t border-gray-200 py-12 relative z-30">

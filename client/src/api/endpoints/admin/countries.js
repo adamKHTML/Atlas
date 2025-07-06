@@ -30,16 +30,39 @@ export const adminCountriesApi = apiSlice.injectEndpoints({
             transformResponse: (response) => response,
         }),
 
-        // ÉTAPE 2 : Mise à jour/ajout du contenu (CountryContent)
+        // 🔧 ÉTAPE 2 : Mise à jour/ajout du contenu (CountryContent) - CORRIGÉ
         updateCountryContent: builder.mutation({
-            query: ({ countryId, sections }) => ({
-                url: `/api/admin/countries/${countryId}/content`,
-                method: 'PUT',
-                body: { sections },
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            }),
+            query: ({ countryId, sections }) => {
+                // 🔧 CORRECTION : Transformer les sections pour mettre l'URL d'image dans 'content'
+                const transformedSections = sections.map(section => {
+                    if (section.type === 'image') {
+                        // Pour les images : l'URL va dans 'content'
+                        return {
+                            title: section.title,
+                            content: section.imageUrl || '', // ✅ L'URL de l'image va dans 'content'
+                            type: section.type
+                        };
+                    } else {
+                        // Pour texte et vidéo : le contenu va normalement dans 'content'
+                        return {
+                            title: section.title,
+                            content: section.content || '',
+                            type: section.type
+                        };
+                    }
+                });
+
+                console.log('📤 Sections transformées envoyées à l\'API:', transformedSections);
+
+                return {
+                    url: `/api/admin/countries/${countryId}/content`,
+                    method: 'PUT',
+                    body: { sections: transformedSections },
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                };
+            },
             invalidatesTags: (result, error, { countryId }) => [
                 { type: 'Countries', id: countryId },
                 { type: 'Content', id: `country-${countryId}` },

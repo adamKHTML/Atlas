@@ -195,17 +195,13 @@ const CountryContent = () => {
         }
 
         try {
-            // Préparation des données pour l'API Symfony
-            const sectionsData = sections.map(section => ({
-                title: section.title,
-                content: section.content, // ✅ Correspond au champ 'section' dans l'entité Content
-                type: section.type
-                // Note: on n'envoie pas image_url ici car c'est géré séparément
-            }));
+            console.log('📤 Sections avant envoi:', sections);
 
+            // 🔧 SIMPLIFICATION : Envoyez directement les sections
+            // La transformation se fait maintenant dans l'API
             const result = await updateCountryContent({
                 countryId: parseInt(countryId),
-                sections: sectionsData
+                sections: sections // ✅ Envoi direct, transformation dans l'API
             }).unwrap();
 
             console.log('✅ Contenu sauvegardé avec succès:', result);

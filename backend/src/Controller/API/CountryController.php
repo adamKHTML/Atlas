@@ -174,7 +174,165 @@ class CountryController extends AbstractController
         }
     }
 
-    // 🆕 ENDPOINT CORRIGÉ POUR GÉRER LES IMAGES DE SECTIONS
+    // 🆕 MISE À JOUR D'UN PAYS (pour CountryEdit)
+    #[Route('/api/admin/countries/{id}', name: 'api_admin_country_update', methods: ['PUT'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function updateCountry(int $id, Request $request): JsonResponse
+    {
+        $country = $this->countryRepository->find($id);
+
+        if (!$country) {
+            return new JsonResponse(['error' => 'Pays introuvable'], Response::HTTP_NOT_FOUND);
+        }
+
+        try {
+            // Récupération des données selon le type de contenu
+            $contentType = $request->headers->get('Content-Type');
+            
+            if (str_contains($contentType, 'multipart/form-data')) {
+                // FormData (avec image)
+                $name = $request->request->get('name');
+                $code = $request->request->get('code');
+                $flagUrl = $request->request->get('flag_url');
+                $description = $request->request->get('description');
+                $countryImageFile = $request->files->get('country_image');
+            } else {
+                // JSON classique (sans image)
+                $data = json_decode($request->getContent(), true);
+                $name = $data['name'] ?? null;
+                $code = $data['code'] ?? null;
+                $flagUrl = $data['flag_url'] ?? null;
+                $description = $data['description'] ?? null;
+                $countryImageFile = null;
+            }
+
+            // Validation des champs obligatoires
+            if (!$name || !$code || !$description) {
+                return new JsonResponse([
+                    'error' => 'Les champs nom, code et description sont obligatoires'
+                ], Response::HTTP_BAD_REQUEST);
+            }
+
+            // Vérifier que le nom n'est pas déjà utilisé par un autre pays
+            $existingCountry = $this->countryRepository->findOneBy(['name' => $name]);
+            if ($existingCountry && $existingCountry->getId() !== $id) {
+                return new JsonResponse([
+                    'error' => 'Ce nom de pays est déjà utilisé par un autre pays'
+                ], Response::HTTP_CONFLICT);
+            }
+
+            // Mise à jour des champs
+            $country->setName($name);
+            $country->setCode($code);
+            $country->setFlagUrl($flagUrl);
+            $country->setDescription($description);
+            $country->setUpdatedAt(new \DateTimeImmutable());
+
+            // Gestion de l'upload d'image si présente
+            if ($countryImageFile) {
+                // Supprimer l'ancienne image si elle existe
+                if ($country->getCountryImage()) {
+                    $oldImagePath = $this->getParameter('kernel.project_dir') . '/public' . $country->getCountryImage();
+                    if (file_exists($oldImagePath)) {
+                        unlink($oldImagePath);
+                    }
+                }
+
+                // Upload de la nouvelle image
+                $newImagePath = $this->handleImageUpload($countryImageFile, 'countries');
+                if ($newImagePath) {
+                    $country->setCountryImage($newImagePath);
+                }
+            }
+
+            $this->entityManager->flush();
+
+            if ($this->logger) {
+                $this->logger->info('✅ Pays mis à jour avec succès', [
+                    'country_id' => $id,
+                    'name' => $name,
+                    'image_updated' => $countryImageFile !== null
+                ]);
+            }
+
+            return new JsonResponse($this->serializeCountryAdmin($country));
+
+        } catch (\Exception $e) {
+            if ($this->logger) {
+                $this->logger->error('❌ Erreur lors de la mise à jour du pays', [
+                    'country_id' => $id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+            }
+
+            return new JsonResponse([
+                'error' => 'Erreur lors de la mise à jour du pays: ' . $e->getMessage()
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    // 🆕 SUPPRESSION D'UN PAYS (pour CountryPage)
+    #[Route('/api/admin/countries/{id}', name: 'api_admin_country_delete', methods: ['DELETE'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function deleteCountry(int $id): JsonResponse
+    {
+        $country = $this->countryRepository->find($id);
+
+        if (!$country) {
+            return new JsonResponse(['error' => 'Pays introuvable'], Response::HTTP_NOT_FOUND);
+        }
+
+        try {
+            $countryName = $country->getName();
+
+            // Supprimer tous les contenus associés
+            $contents = $this->contentRepository->findBy(['country' => $country]);
+            foreach ($contents as $content) {
+                $this->entityManager->remove($content);
+            }
+
+            // Supprimer l'image du pays si elle existe
+            if ($country->getCountryImage()) {
+                $imagePath = $this->getParameter('kernel.project_dir') . '/public' . $country->getCountryImage();
+                if (file_exists($imagePath)) {
+                    unlink($imagePath);
+                }
+            }
+
+            // Supprimer le pays
+            $this->entityManager->remove($country);
+            $this->entityManager->flush();
+
+            if ($this->logger) {
+                $this->logger->info('✅ Pays supprimé avec succès', [
+                    'country_id' => $id,
+                    'name' => $countryName,
+                    'contents_deleted' => count($contents)
+                ]);
+            }
+
+            return new JsonResponse([
+                'message' => "Le pays \"{$countryName}\" a été supprimé avec succès",
+                'deleted_contents' => count($contents)
+            ]);
+
+        } catch (\Exception $e) {
+            if ($this->logger) {
+                $this->logger->error('❌ Erreur lors de la suppression du pays', [
+                    'country_id' => $id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+            }
+
+            return new JsonResponse([
+                'error' => 'Erreur lors de la suppression du pays: ' . $e->getMessage()
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    // ENDPOINT POUR GÉRER LES IMAGES DE SECTIONS
     #[Route('/api/admin/countries/{id}/content', name: 'api_admin_country_update_content', methods: ['PUT'])]
     #[IsGranted('ROLE_ADMIN')]
     public function updateCountryContent(int $id, Request $request): JsonResponse
@@ -212,18 +370,12 @@ class CountryController extends AbstractController
                 $content->setCreatedAt(new \DateTimeImmutable());
                 $content->setUpdatedAt(new \DateTimeImmutable());
 
-                // 🆕 GESTION CORRECTE DU CONTENU SELON LE TYPE
-                if ($sectionData['type'] === 'image') {
-                    // Pour les images, le champ 'section' contient l'URL de l'image
-                    $content->setSection($sectionData['image_url'] ?? '');
-                } else {
-                    // Pour texte et vidéo, le champ 'section' contient le contenu
-                    $content->setSection($sectionData['content'] ?? '');
-                }
+                // Le contenu va toujours dans 'section'
+                // Que ce soit une URL d'image, du texte ou une URL de vidéo
+                $content->setSection($sectionData['content'] ?? '');
 
                 $this->entityManager->persist($content);
             }
-
             $country->setUpdatedAt(new \DateTimeImmutable());
             $this->entityManager->flush();
 
@@ -376,7 +528,6 @@ class CountryController extends AbstractController
         ];
     }
 
-    // 🆕 MÉTHODE CORRIGÉE POUR SERIALISER LE CONTENU
     private function serializeContent(Content $content): array
     {
         $baseData = [
