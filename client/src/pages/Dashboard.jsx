@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import { selectUser, selectIsAdmin, selectIsAuthenticated } from '../store/slices/authSlice';
 import { useLogoutMutation } from '../api/endpoints/auth';
 import { useGetCountriesForDashboardQuery } from '../api/endpoints/countries';
+import { useGetUnreadCountQuery } from '../api/endpoints/notifications';
 
 const Dashboard = () => {
     const user = useSelector(selectUser);
@@ -19,6 +20,13 @@ const Dashboard = () => {
         error: countriesError
     } = useGetCountriesForDashboardQuery();
 
+    // 📧 Récupérer le nombre de notifications non lues
+    const { data: unreadData } = useGetUnreadCountQuery();
+    const unreadCount = unreadData?.unread_count || 0;
+
+    // Vérifier si l'utilisateur est modérateur
+    const isModerator = user?.roles?.includes('ROLE_MODERATOR');
+
     // Actions admin
     const adminActions = [
         {
@@ -29,43 +37,38 @@ const Dashboard = () => {
             color: "#10B981"
         },
         {
-            title: "Gérer les pays",
-            description: "Modifier ou supprimer des pays existants",
-            link: "/admin/countries",
-            icon: "✏️",
-            color: "#3B82F6"
+            title: "Mes Notifications",
+            description: "Gérer mes messages privés et notifications",
+            link: "/notifications",
+            icon: "📧",
+            color: "#3B82F6",
+            badge: unreadCount > 0 ? unreadCount : null
         },
         {
-            title: "Gestion utilisateurs",
-            description: "Administrer les comptes utilisateurs",
-            link: "/admin/user-management",
+            title: "Gestion Utilisateurs",
+            description: "Administrer comptes, modération et bannissements",
+            link: "/user-management",
             icon: "👥",
             color: "#8B5CF6"
         },
         {
             title: "Analytics",
             description: "Analyser les données et statistiques",
-            link: "/admin/analytics",
+            link: "/analytics",
             icon: "📊",
             color: "#F59E0B"
         }
     ];
 
-    // Actions voyageur
-    const travelerActions = [
+    // Actions modérateur
+    const moderatorActions = [
         {
-            title: "Mes Topics/Questions",
-            description: "Voir et gérer mes discussions",
-            link: "/my-topics",
-            icon: "💬",
-            color: "#10B981"
-        },
-        {
-            title: "Pages à consulter",
-            description: "Découvrir de nouveaux pays",
-            link: "/countries",
-            icon: "📖",
-            color: "#3B82F6"
+            title: "Mes Notifications",
+            description: "Gérer mes messages privés et notifications",
+            link: "/notifications",
+            icon: "📧",
+            color: "#3B82F6",
+            badge: unreadCount > 0 ? unreadCount : null
         },
         {
             title: "Mon profil",
@@ -75,11 +78,51 @@ const Dashboard = () => {
             color: "#8B5CF6"
         },
         {
-            title: "Favoris",
-            description: "Mes articles et pays favoris",
-            link: "/favorites",
-            icon: "❤️",
+            title: "Gestion Utilisateurs",
+            description: "Modération des comptes utilisateurs",
+            link: "/admin/user-management",
+            icon: "👥",
+            color: "#10B981"
+        },
+        {
+            title: "Pays à découvrir",
+            description: "Explorer les destinations disponibles",
+            link: "/countries",
+            icon: "🌍",
             color: "#F59E0B"
+        }
+    ];
+
+    // Actions voyageur/user
+    const travelerActions = [
+        {
+            title: "Mes Notifications",
+            description: "Voir mes messages privés et notifications",
+            link: "/notifications",
+            icon: "📧",
+            color: "#3B82F6",
+            badge: unreadCount > 0 ? unreadCount : null
+        },
+        {
+            title: "Mes Topics/Questions",
+            description: "Voir et gérer mes discussions",
+            link: "/my-topics",
+            icon: "💬",
+            color: "#10B981"
+        },
+        {
+            title: "Pays à découvrir",
+            description: "Explorer les destinations disponibles",
+            link: "/countries",
+            icon: "🌍",
+            color: "#F59E0B"
+        },
+        {
+            title: "Mon profil",
+            description: "Gérer mes informations personnelles",
+            link: "/profile",
+            icon: "👤",
+            color: "#8B5CF6"
         }
     ];
 
@@ -125,16 +168,16 @@ const Dashboard = () => {
                 style={{
                     position: 'relative',
                     width: '40%',
-                    height: '200px', // 🔧 Encore plus compact (220px → 200px)
-                    borderRadius: '16px', // 🔧 Coins plus subtils
+                    height: '200px',
+                    borderRadius: '16px',
                     overflow: 'hidden',
                     cursor: 'pointer',
                     transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-                    boxShadow: '0 3px 12px rgba(0,0,0,0.08)', // 🔧 Ombre plus douce
+                    boxShadow: '0 3px 12px rgba(0,0,0,0.08)',
                     background: 'linear-gradient(135deg, #4a5c52 0%, #2d3d32 100%)'
                 }}
                 onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-3px)'; // 🔧 Mouvement plus subtil
+                    e.currentTarget.style.transform = 'translateY(-3px)';
                     e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)';
                 }}
                 onMouseLeave={(e) => {
@@ -142,17 +185,17 @@ const Dashboard = () => {
                     e.currentTarget.style.boxShadow = '0 3px 12px rgba(0,0,0,0.08)';
                 }}
             >
-                {/* 🆕 Titre en haut sur le fond vert */}
+                {/* Titre en haut */}
                 <div style={{
                     position: 'absolute',
                     top: 0,
                     left: 0,
                     right: 0,
-                    padding: '12px 16px', // 🔧 Padding encore plus compact
+                    padding: '12px 16px',
                     zIndex: 2
                 }}>
                     <h3 style={{
-                        fontSize: '22px', // 🔧 Police réduite (24px → 22px)
+                        fontSize: '22px',
                         fontWeight: '300',
                         margin: 0,
                         color: 'white',
@@ -163,16 +206,16 @@ const Dashboard = () => {
                     </h3>
                 </div>
 
-                {/* 🆕 Image dans la partie inférieure */}
+                {/* Image dans la partie inférieure */}
                 <div style={{
                     position: 'absolute',
-                    bottom: '14px', // 🔧 Marge réduite (16px → 14px)
+                    bottom: '14px',
                     left: '14px',
                     right: '14px',
-                    height: '110px', // 🔧 Hauteur image réduite (120px → 110px)
-                    borderRadius: '10px', // 🔧 Coins plus subtils
+                    height: '110px',
+                    borderRadius: '10px',
                     overflow: 'hidden',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.12)' // 🔧 Ombre plus douce
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.12)'
                 }}>
                     <img
                         src={getCountryImage()}
@@ -183,8 +226,7 @@ const Dashboard = () => {
                             objectFit: 'cover'
                         }}
                         onError={(e) => {
-                            // Fallback sur le drapeau en cas d'erreur
-                            console.log('❌ Erreur image pour', country.name, '- URL tentée:', getCountryImage());
+                            console.log('❌ Erreur image pour', country.name);
                             e.target.src = country.flag_url;
                         }}
                     />
@@ -200,10 +242,10 @@ const Dashboard = () => {
                 {/* Badge petit drapeau */}
                 <div style={{
                     position: 'absolute',
-                    bottom: '20px', // 🔧 Position ajustée
+                    bottom: '20px',
                     right: '20px',
-                    width: '22px', // 🔧 Plus petit (24px → 22px)
-                    height: '16px', // 🔧 Plus petit (18px → 16px)
+                    width: '22px',
+                    height: '16px',
                     borderRadius: '2px',
                     overflow: 'hidden',
                     border: '1.5px solid white',
@@ -223,6 +265,83 @@ const Dashboard = () => {
             </div>
         );
     };
+
+    // Fonction pour rendre les boutons d'action avec badge
+    const renderActionButton = (action, index) => (
+        <button
+            key={index}
+            onClick={() => handleActionClick(action.link)}
+            style={{
+                backgroundColor: 'white',
+                border: '1px solid #e0e0e0',
+                borderRadius: '8px',
+                padding: '20px',
+                textAlign: 'left',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                position: 'relative'
+            }}
+            onMouseOver={(e) => {
+                e.currentTarget.style.transform = 'translateY(-3px)';
+                e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+            }}
+            onMouseOut={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+            }}
+        >
+            {/* Badge pour notifications non lues */}
+            {action.badge && (
+                <div style={{
+                    position: 'absolute',
+                    top: '12px',
+                    right: '12px',
+                    backgroundColor: '#EF4444',
+                    color: 'white',
+                    borderRadius: '50%',
+                    width: '20px',
+                    height: '20px',
+                    fontSize: '11px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 'bold'
+                }}>
+                    {action.badge > 9 ? '9+' : action.badge}
+                </div>
+            )}
+
+            <div style={{
+                width: '44px',
+                height: '44px',
+                backgroundColor: action.color,
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '22px',
+                marginBottom: '14px'
+            }}>
+                {action.icon}
+            </div>
+            <h4 style={{
+                fontSize: '15px',
+                fontWeight: 'bold',
+                color: '#2E3830',
+                margin: '0 0 6px 0'
+            }}>
+                {action.title}
+            </h4>
+            <p style={{
+                fontSize: '13px',
+                color: '#666',
+                margin: '0'
+            }}>
+                {action.description}
+            </p>
+        </button>
+    );
 
     // Si l'utilisateur n'est pas chargé, afficher un chargement
     if (!user) {
@@ -262,7 +381,7 @@ const Dashboard = () => {
                     </div>
                     <div className="text-welcome">
                         <h1 style={{ fontStyle: 'Italic', fontSize: '58px', marginBottom: '20px', color: '#F3CB23' }}>
-                            {isAdmin ? 'BIENVENUE ADMIN' : 'BIENVENUE SUR VOTRE ESPACE'}
+                            {isAdmin ? 'BIENVENUE ADMIN' : isModerator ? 'BIENVENUE MODÉRATEUR' : 'BIENVENUE SUR VOTRE ESPACE'}
                         </h1>
                         <h2 style={{ fontFamily: 'Goblin One, sans-serif', fontSize: '12px', fontWeight: '400', color: '#F3CB23' }}>
                             {user.firstname} {user.lastname}
@@ -304,11 +423,11 @@ const Dashboard = () => {
                             </div>
                             <div style={{ textAlign: 'center' }}>
                                 <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
-                                    -
+                                    {unreadCount}
                                 </div>
-                                <div>Utilisateurs</div>
+                                <div>Notifications</div>
                                 <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                                    À implémenter
+                                    Messages non lus
                                 </div>
                             </div>
                         </div>
@@ -321,66 +440,14 @@ const Dashboard = () => {
 
                         <div style={{
                             display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', // 🔧 Largeur réduite (260px → 240px)
-                            gap: '16px', // 🔧 Gap réduit (18px → 16px)
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                            gap: '16px',
                             marginBottom: '50px'
                         }}>
-                            {adminActions.map((action, index) => (
-                                <button
-                                    key={index}
-                                    onClick={() => handleActionClick(action.link)}
-                                    style={{
-                                        backgroundColor: 'white',
-                                        border: '1px solid #e0e0e0',
-                                        borderRadius: '8px',
-                                        padding: '20px', // 🔧 Padding réduit (24px → 20px)
-                                        textAlign: 'left',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                                    }}
-                                    onMouseOver={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(-3px)'; // 🔧 Mouvement réduit
-                                        e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
-                                    }}
-                                    onMouseOut={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-                                    }}
-                                >
-                                    <div style={{
-                                        width: '44px', // 🔧 Taille icône réduite (48px → 44px)
-                                        height: '44px',
-                                        backgroundColor: action.color,
-                                        borderRadius: '8px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: '22px', // 🔧 Icône plus petite (24px → 22px)
-                                        marginBottom: '14px' // 🔧 Marge réduite (16px → 14px)
-                                    }}>
-                                        {action.icon}
-                                    </div>
-                                    <h4 style={{
-                                        fontSize: '15px', // 🔧 Font réduite (16px → 15px)
-                                        fontWeight: 'bold',
-                                        color: '#2E3830',
-                                        margin: '0 0 6px 0' // 🔧 Marge réduite (8px → 6px)
-                                    }}>
-                                        {action.title}
-                                    </h4>
-                                    <p style={{
-                                        fontSize: '13px', // 🔧 Font réduite (14px → 13px)
-                                        color: '#666',
-                                        margin: '0'
-                                    }}>
-                                        {action.description}
-                                    </p>
-                                </button>
-                            ))}
+                            {adminActions.map((action, index) => renderActionButton(action, index))}
                         </div>
 
-                        {/* 🆕 Section Pays - CARTES COMPACTES */}
+                        {/* Section Pays */}
                         <div className="title-section">
                             <h2 className="main-title">PAYS DISPONIBLES</h2>
                             <div className="title-divider"></div>
@@ -408,15 +475,12 @@ const Dashboard = () => {
                                 <p style={{ color: '#ef4444' }}>
                                     Erreur lors du chargement des pays
                                 </p>
-                                <p style={{ fontSize: '14px', color: '#999', marginTop: '10px' }}>
-                                    {countriesError.message || 'Erreur inconnue'}
-                                </p>
                             </div>
                         ) : countriesData?.countries?.length > 0 ? (
                             <div style={{
                                 display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', // 🔧 Largeur réduite
-                                gap: '16px', // 🔧 Gap réduit
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                                gap: '16px',
                                 marginBottom: '40px'
                             }}>
                                 {countriesData.countries.map((country) => (
@@ -453,8 +517,100 @@ const Dashboard = () => {
                             </div>
                         )}
                     </div>
+                ) : isModerator ? (
+                    // Contenu modérateur
+                    <div className="featured-container" style={{ backgroundColor: 'white', padding: '30px' }}>
+                        <div className="title-section" style={{ textAlign: 'center', marginBottom: '40px' }}>
+                            <h2 className="main-title">TABLEAU DE BORD MODÉRATEUR</h2>
+                            <div className="title-divider" style={{ width: '60px', margin: '20px auto' }}></div>
+                        </div>
+
+                        {/* Stats Modérateur */}
+                        <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '50px' }}>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
+                                    {unreadCount}
+                                </div>
+                                <div>Notifications</div>
+                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                                    Messages non lus
+                                </div>
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>-</div>
+                                <div>Signalements</div>
+                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                                    À implémenter
+                                </div>
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
+                                    {countriesData?.countries?.length || 0}
+                                </div>
+                                <div>Pays disponibles</div>
+                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                                    À modérer
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Actions Modérateur */}
+                        <div className="title-section" style={{ marginBottom: '30px' }}>
+                            <h2 className="main-title">MES ACTIONS MODÉRATEUR</h2>
+                            <div className="title-divider"></div>
+                        </div>
+
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                            gap: '16px',
+                            marginBottom: '50px'
+                        }}>
+                            {moderatorActions.map((action, index) => renderActionButton(action, index))}
+                        </div>
+
+                        {/* Section Pays pour Modérateurs */}
+                        <div className="title-section">
+                            <h2 className="main-title">PAYS À MODÉRER</h2>
+                            <div className="title-divider"></div>
+                        </div>
+
+                        {countriesLoading ? (
+                            <div style={{
+                                textAlign: 'center',
+                                padding: '40px',
+                                color: '#666'
+                            }}>
+                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
+                                <p>Chargement des pays...</p>
+                            </div>
+                        ) : countriesData?.countries?.length > 0 ? (
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                                gap: '16px',
+                                marginBottom: '40px'
+                            }}>
+                                {countriesData.countries.slice(0, 4).map((country) => (
+                                    <CountryCard key={country.id} country={country} />
+                                ))}
+                            </div>
+                        ) : (
+                            <div style={{
+                                textAlign: 'center',
+                                padding: '40px',
+                                color: '#666',
+                                backgroundColor: '#f8f9fa',
+                                borderRadius: '8px',
+                                border: '2px dashed #ddd'
+                            }}>
+                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌍</div>
+                                <p>Aucun pays disponible pour le moment</p>
+                            </div>
+                        )}
+                    </div>
                 ) : (
-                    // Contenu voyageur - MÊME STYLE COMPACT
+                    // Contenu voyageur/user
                     <div className="featured-container" style={{ backgroundColor: 'white', padding: '30px' }}>
                         <div className="title-section" style={{ textAlign: 'center', marginBottom: '40px' }}>
                             <h2 className="main-title">TABLEAU DE BORD</h2>
@@ -464,15 +620,17 @@ const Dashboard = () => {
                         {/* Stats Voyageur */}
                         <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '50px' }}>
                             <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>-</div>
-                                <div>Commentaires</div>
+                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
+                                    {unreadCount}
+                                </div>
+                                <div>Notifications</div>
                                 <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                                    À implémenter
+                                    Messages non lus
                                 </div>
                             </div>
                             <div style={{ textAlign: 'center' }}>
                                 <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>-</div>
-                                <div>Likes</div>
+                                <div>Topics</div>
                                 <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
                                     À implémenter
                                 </div>
@@ -496,63 +654,11 @@ const Dashboard = () => {
 
                         <div style={{
                             display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', // 🔧 Largeur réduite
-                            gap: '16px', // 🔧 Gap réduit
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                            gap: '16px',
                             marginBottom: '50px'
                         }}>
-                            {travelerActions.map((action, index) => (
-                                <button
-                                    key={index}
-                                    onClick={() => handleActionClick(action.link)}
-                                    style={{
-                                        backgroundColor: 'white',
-                                        border: '1px solid #e0e0e0',
-                                        borderRadius: '8px',
-                                        padding: '20px', // 🔧 Padding réduit
-                                        textAlign: 'left',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                                    }}
-                                    onMouseOver={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(-3px)';
-                                        e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
-                                    }}
-                                    onMouseOut={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-                                    }}
-                                >
-                                    <div style={{
-                                        width: '44px', // 🔧 Taille réduite
-                                        height: '44px',
-                                        backgroundColor: action.color,
-                                        borderRadius: '8px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: '22px', // 🔧 Icône plus petite
-                                        marginBottom: '14px'
-                                    }}>
-                                        {action.icon}
-                                    </div>
-                                    <h4 style={{
-                                        fontSize: '15px', // 🔧 Font réduite
-                                        fontWeight: 'bold',
-                                        color: '#2E3830',
-                                        margin: '0 0 6px 0'
-                                    }}>
-                                        {action.title}
-                                    </h4>
-                                    <p style={{
-                                        fontSize: '13px', // 🔧 Font réduite
-                                        color: '#666',
-                                        margin: '0'
-                                    }}>
-                                        {action.description}
-                                    </p>
-                                </button>
-                            ))}
+                            {travelerActions.map((action, index) => renderActionButton(action, index))}
                         </div>
 
                         {/* Section Pays pour Voyageurs */}
@@ -588,8 +694,8 @@ const Dashboard = () => {
                             <>
                                 <div style={{
                                     display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', // 🔧 Largeur réduite
-                                    gap: '16px', // 🔧 Gap réduit
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                                    gap: '16px',
                                     marginBottom: '40px'
                                 }}>
                                     {countriesData.countries.slice(0, 6).map((country) => (

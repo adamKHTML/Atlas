@@ -17,6 +17,11 @@ import CountryEdit from './features/country/administration/CountryEdit';
 import CountryForum from './pages/CountryForum';
 import CreateTopicForm from './features/country/topic/CreateTopicForm'; // Nouvelle page
 import TopicView from './components/TopicView';
+import NotificationPage from './pages/NotificationPage';
+import UserManagementPage from './pages/UserManagementPage';
+import ProfilePage from './pages/ProfilePage';
+import AnalyticsPage from './pages/AnalyticsPage';
+import CountriesListPage from './pages/CountriesListPage';
 
 function App() {
   return (
@@ -28,19 +33,28 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path='/Dashboard' element={<Dashboard />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path='/countries' element={<CountriesListPage />} />
           <Route path='/country-form' element={<CountryForm />} />
           <Route path='/country-content/:countryId' element={<CountryContent />} />
 
-          {/* ✅ ROUTES HARMONISÉES pour les pays et forum */}
+          {/* ROUTES PAYS */}
           <Route path='/country/:countryId' element={<CountryPage />} />
           <Route path="/country-edit/:countryId" element={<CountryEdit />} />
 
-          {/* ✅ ROUTES FORUM avec countryId */}
+          {/*  ROUTES FORUM  */}
           <Route path="/country/:countryId/discussions" element={<CountryForum />} />
           <Route path="/country/:countryId/discussions/create-topic" element={<CreateTopicForm />} />
 
-          {/* ✅ ROUTE TOPIC VIEW - topicId au lieu de id */}
+          {/* ROUTE VUE TOPIC  */}
           <Route path="/topic/:topicId" element={<TopicView />} />
+          {/* ROUTE NOTIFICATION - MESSAGE PRIVEE */}
+          <Route path="/notifications" element={<NotificationPage />} />
+          {/* ROUTE GESTION UTILISATEURS */}
+          <Route path="/user-management" element={<UserManagementPage />} />
+          {/*   ROUTE PROFIL */}
+          <Route path="/profile" element={<ProfilePage />} />
+          {/*  NOUVELLE ROUTE ANALYTICS  */}
+          <Route path="/analytics" element={<AnalyticsPage />} />
         </Routes>
       </Router>
     </Provider>
