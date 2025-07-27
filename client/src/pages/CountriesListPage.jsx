@@ -1,17 +1,27 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useGetAllCountriesQuery, useSearchCountriesQuery } from '../api/endpoints/countries';
+// src/pages/CountriesListPage.jsx - Version finale avec style CountryPage
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useGetAllCountriesQuery } from '../api/endpoints/countries';
+import { useSelector } from 'react-redux';
+import DOMPurify from 'dompurify';
 
 const CountriesListPage = () => {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [currentPage, setCurrentPage] = useState(1);
-    const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState('grid'); // 'grid' ou 'list'
     const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filteredCountries, setFilteredCountries] = useState([]);
+
     const itemsPerPage = 12;
 
+    // 🔒 Gestion de l'authentification comme dans CountryPage
+    const user = useSelector(state => state.auth?.user);
+    const isAuthenticated = useSelector(state => state.auth?.isAuthenticated || false);
+
     // Hook pour gérer la responsive
-    React.useEffect(() => {
+    useEffect(() => {
         const handleResize = () => setWindowWidth(window.innerWidth);
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
@@ -21,42 +31,78 @@ const CountriesListPage = () => {
     const isMobile = windowWidth <= 768;
     const isSmallMobile = windowWidth <= 480;
 
-    // RTK Query hooks - utiliser la recherche si terme présent, sinon liste normale
-    const shouldSearch = searchTerm.trim().length > 0;
-
+    // RTK Query pour récupérer tous les pays
     const {
         data: countriesData,
         isLoading,
         error,
         refetch
-    } = useGetAllCountriesQuery(
-        {
-            page: currentPage,
-            limit: itemsPerPage,
-            withImages: true
-        },
-        { skip: shouldSearch }
-    );
-
-    const {
-        data: searchData,
-        isLoading: isSearching,
-        error: searchError
-    } = useSearchCountriesQuery(searchTerm, {
-        skip: !shouldSearch
+    } = useGetAllCountriesQuery({
+        page: currentPage,
+        limit: itemsPerPage,
+        withImages: true
     });
 
-    // Déterminer les données à afficher
-    const displayData = shouldSearch ? searchData : countriesData;
-    const countries = displayData?.countries || [];
-    const pagination = displayData?.pagination || {};
-    const loading = shouldSearch ? isSearching : isLoading;
-    const dataError = shouldSearch ? searchError : error;
+    const allCountries = countriesData?.countries || [];
+    const pagination = countriesData?.pagination || {};
+
+    // 🔍 Filtrage corrigé - plus strict pour éviter les faux positifs
+    useEffect(() => {
+        if (searchTerm.trim()) {
+            const filtered = allCountries.filter(country => {
+                const searchLower = searchTerm.toLowerCase();
+                const countryName = country.name.toLowerCase();
+
+                // Fonction pour supprimer les accents
+                const removeAccents = (str) => {
+                    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                };
+
+                const searchWithoutAccents = removeAccents(searchLower);
+                const countryNameWithoutAccents = removeAccents(countryName);
+
+                // Filtrage strict : seulement au début du nom ou début des mots
+                return countryName.startsWith(searchLower) ||
+                    countryNameWithoutAccents.startsWith(searchWithoutAccents) ||
+                    countryName.split(' ').some(word => word.startsWith(searchLower)) ||
+                    countryNameWithoutAccents.split(' ').some(word => word.startsWith(searchWithoutAccents));
+            });
+            setFilteredCountries(filtered);
+        } else {
+            setFilteredCountries(allCountries);
+        }
+    }, [allCountries, searchTerm]);
+
+    // 🔒 Fonction pour la navigation adaptative (comme CountryPage)
+    const handleMainNavigation = () => {
+        if (isAuthenticated) {
+            navigate('/dashboard');
+        } else {
+            navigate('/');
+        }
+    };
+
+    // Fonction pour décoder les entités HTML
+    const decodeHtmlEntities = (text) => {
+        if (!text || typeof text !== 'string') return text;
+
+        const textArea = document.createElement('textarea');
+        textArea.innerHTML = text;
+        return textArea.value;
+    };
 
     // Gestionnaires d'événements
-    const handleSearch = (e) => {
-        setSearchTerm(e.target.value);
-        setCurrentPage(1); // Reset à la page 1 lors d'une recherche
+    const handleSearchChange = (e) => {
+        const value = e.target.value;
+        setSearchTerm(value);
+        setCurrentPage(1);
+
+        // Mettre à jour l'URL
+        if (value.trim()) {
+            setSearchParams({ search: value });
+        } else {
+            setSearchParams({});
+        }
     };
 
     const handlePageChange = (newPage) => {
@@ -67,6 +113,16 @@ const CountriesListPage = () => {
     const handleCountryClick = (countryId) => {
         navigate(`/country/${countryId}`);
     };
+
+    const clearSearch = () => {
+        setSearchTerm('');
+        setSearchParams({});
+        setCurrentPage(1);
+    };
+
+    // Déterminer les pays à afficher (filtrés ou tous)
+    const isSearching = searchTerm.trim().length > 0;
+    const displayedCountries = isSearching ? filteredCountries : allCountries;
 
     // Composant pour une carte de pays
     const CountryCard = ({ country, viewMode }) => {
@@ -111,7 +167,7 @@ const CountriesListPage = () => {
                     }}>
                         <img
                             src={getCountryImage()}
-                            alt={country.name}
+                            alt={decodeHtmlEntities(DOMPurify.sanitize(country.name))}
                             style={{
                                 width: '100%',
                                 height: '100%',
@@ -129,7 +185,7 @@ const CountriesListPage = () => {
                             color: '#374640',
                             margin: '0 0 8px 0'
                         }}>
-                            {country.name}
+                            {decodeHtmlEntities(DOMPurify.sanitize(country.name))}
                         </h3>
                         <p style={{
                             fontSize: isMobile ? '13px' : '14px',
@@ -140,7 +196,7 @@ const CountriesListPage = () => {
                             WebkitBoxOrient: 'vertical',
                             overflow: 'hidden'
                         }}>
-                            {country.description}
+                            {decodeHtmlEntities(DOMPurify.sanitize(country.description))}
                         </p>
                     </div>
                     <div style={{
@@ -158,7 +214,7 @@ const CountriesListPage = () => {
                         }}>
                             <img
                                 src={country.flag_url}
-                                alt={`Drapeau ${country.name}`}
+                                alt={`Drapeau ${decodeHtmlEntities(DOMPurify.sanitize(country.name))}`}
                                 style={{
                                     width: '100%',
                                     height: '100%',
@@ -209,7 +265,7 @@ const CountriesListPage = () => {
                 }}>
                     <img
                         src={getCountryImage()}
-                        alt={country.name}
+                        alt={decodeHtmlEntities(DOMPurify.sanitize(country.name))}
                         style={{
                             width: '100%',
                             height: '100%',
@@ -234,7 +290,7 @@ const CountriesListPage = () => {
                     }}>
                         <img
                             src={country.flag_url}
-                            alt={`Drapeau ${country.name}`}
+                            alt={`Drapeau ${decodeHtmlEntities(DOMPurify.sanitize(country.name))}`}
                             style={{
                                 width: '100%',
                                 height: '100%',
@@ -254,7 +310,7 @@ const CountriesListPage = () => {
                         color: '#374640',
                         margin: '0 0 12px 0'
                     }}>
-                        {country.name}
+                        {decodeHtmlEntities(DOMPurify.sanitize(country.name))}
                     </h3>
                     <p style={{
                         fontSize: isMobile ? '13px' : '14px',
@@ -266,7 +322,7 @@ const CountriesListPage = () => {
                         WebkitBoxOrient: 'vertical',
                         overflow: 'hidden'
                     }}>
-                        {country.description}
+                        {decodeHtmlEntities(DOMPurify.sanitize(country.description))}
                     </p>
                 </div>
 
@@ -292,7 +348,7 @@ const CountriesListPage = () => {
 
     // Composant de pagination
     const Pagination = () => {
-        if (!pagination.pages || pagination.pages <= 1) return null;
+        if (!pagination.pages || pagination.pages <= 1 || isSearching) return null;
 
         const maxVisiblePages = isMobile ? 3 : 5;
         const startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
@@ -380,48 +436,40 @@ const CountriesListPage = () => {
         );
     };
 
-    if (loading) {
+    if (isLoading) {
         return (
             <div style={{
                 minHeight: '100vh',
-                backgroundColor: '#ECF3F0',
+                backgroundColor: '#4a5c52',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
             }}>
-                <div style={{ textAlign: 'center', color: '#374640' }}>
-                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌍</div>
-                    <p>Chargement des pays...</p>
+                <div style={{ textAlign: 'center' }}>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-400 mx-auto mb-4"></div>
+                    <p className="text-white">Chargement des pays...</p>
                 </div>
             </div>
         );
     }
 
-    if (dataError) {
+    if (error) {
         return (
             <div style={{
                 minHeight: '100vh',
-                backgroundColor: '#ECF3F0',
+                backgroundColor: '#4a5c52',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
             }}>
-                <div style={{ textAlign: 'center', color: '#ef4444' }}>
-                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
-                    <p>Erreur lors du chargement des pays</p>
+                <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '48px', marginBottom: '16px', color: '#ef4444' }}>❌</div>
+                    <p style={{ color: 'white', marginBottom: '16px' }}>Erreur lors du chargement des pays</p>
                     <button
                         onClick={() => refetch()}
-                        style={{
-                            backgroundColor: '#F3CB23',
-                            color: '#374640',
-                            border: 'none',
-                            borderRadius: '8px',
-                            padding: '10px 20px',
-                            marginTop: '10px',
-                            cursor: 'pointer'
-                        }}
+                        className="px-6 py-2 border border-dashed border-yellow-400 text-yellow-400 rounded-full hover:bg-yellow-400 hover:text-gray-800 transition-all duration-300"
                     >
-                        Réessayer
+                        ✦ Réessayer ✦
                     </button>
                 </div>
             </div>
@@ -429,77 +477,35 @@ const CountriesListPage = () => {
     }
 
     return (
-        <>
-            {/* Navbar */}
-            <div style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '70px',
-                backgroundColor: '#374640',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: isMobile ? '0 15px' : '0 30px',
-                zIndex: 100,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}>
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: isMobile ? '10px' : '20px'
-                }}>
-                    <img
-                        src="/image/SunLogo.svg"
-                        alt='Atlas Logo'
-                        style={{ height: isMobile ? '32px' : '40px' }}
-                    />
-                    <h1 style={{
-                        color: 'white',
-                        margin: 0,
-                        fontSize: isMobile ? '16px' : '20px',
-                        fontWeight: '600',
-                        display: isSmallMobile ? 'none' : 'block'
-                    }}>
-                        Atlas - Pays
-                    </h1>
+        <div className="min-h-screen" style={{ backgroundColor: '#4a5c52' }}>
+            {/* 🎯 Navigation supérieure - Logo seul */}
+            <nav className="fixed top-0 left-0 right-0 z-50 px-8 py-6">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                        <img
+                            src="/image/SunLogo2.svg"
+                            alt='Atlas Logo'
+                            style={{ height: isMobile ? '32px' : '80px' }}
+                        />
+                    </div>
+
+                    <div className="flex items-center space-x-6">
+                        <button
+                            onClick={handleMainNavigation}
+                            className="px-6 py-2 border border-dashed border-yellow-400 text-yellow-400 rounded-full hover:bg-yellow-400 hover:text-gray-800 transition-all duration-300"
+                        >
+                            ✦ {isAuthenticated ? 'DASHBOARD' : 'PAGE D\'ACCUEIL'} ✦
+                        </button>
+                    </div>
                 </div>
+            </nav>
 
-                <button
-                    onClick={() => navigate('/Dashboard')}
-                    style={{
-                        color: 'white',
-                        background: 'rgba(255,255,255,0.1)',
-                        border: '1px solid rgba(255,255,255,0.2)',
-                        borderRadius: '8px',
-                        padding: isMobile ? '6px 12px' : '8px 16px',
-                        fontSize: isMobile ? '12px' : '14px',
-                        fontWeight: '500',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                    }}
-                    onMouseOver={(e) => {
-                        e.target.style.backgroundColor = 'rgba(255,255,255,0.2)';
-                    }}
-                    onMouseOut={(e) => {
-                        e.target.style.backgroundColor = 'rgba(255,255,255,0.1)';
-                    }}
-                >
-                    🏠 Dashboard
-                </button>
-            </div>
-
-            {/* Contenu principal */}
-            <div style={{
-                minHeight: '100vh',
-                backgroundColor: '#ECF3F0',
-                paddingTop: '70px'
-            }}>
-                {/* Header avec recherche */}
+            {/* 🎯 Section Hero - Style unifié */}
+            <div className="relative overflow-hidden" style={{ minHeight: '50vh' }}>
+                {/* Header avec recherche - couleur unie */}
                 <div style={{
-                    backgroundColor: '#374640',
-                    padding: isMobile ? '20px 15px' : '30px',
+                    backgroundColor: '#4a5c52', // Couleur plus sombre unifiée
+                    padding: isMobile ? '100px 15px 30px' : '120px 30px 40px',
                     color: 'white'
                 }}>
                     <div style={{
@@ -507,197 +513,327 @@ const CountriesListPage = () => {
                         margin: '0 auto'
                     }}>
                         <h1 style={{
-                            fontSize: isMobile ? '24px' : '32px',
+                            fontSize: isMobile ? '28px' : '40px',
                             fontWeight: '600',
                             margin: '0 0 16px 0',
-                            textAlign: 'center'
+                            textAlign: 'center',
+                            fontFamily: 'Vollkorn, Georgia, serif'
                         }}>
                             🌍 Découvrez nos Destinations
                         </h1>
                         <p style={{
-                            fontSize: isMobile ? '14px' : '16px',
-                            margin: '0 0 24px 0',
+                            fontSize: isMobile ? '14px' : '18px',
+                            margin: '0 0 30px 0',
                             textAlign: 'center',
-                            opacity: 0.9
+                            opacity: 0.9,
+                            fontFamily: 'Vollkorn, Georgia, serif'
                         }}>
-                            Explorez {pagination.total || countries.length} pays et leurs merveilles
+                            Explorez {pagination.total || allCountries.length} pays et leurs merveilles
                         </p>
 
-                        {/* Barre de recherche */}
+                        {/* 🔍 Barre de recherche avec filtrage amélioré */}
                         <div style={{
-                            maxWidth: '500px',
-                            margin: '0 auto',
-                            position: 'relative'
+                            maxWidth: '600px',
+                            margin: '0 auto'
                         }}>
-                            <input
-                                type="text"
-                                placeholder="Rechercher un pays..."
-                                value={searchTerm}
-                                onChange={handleSearch}
+                            <div
                                 style={{
-                                    width: '100%',
-                                    padding: isMobile ? '12px 40px 12px 12px' : '16px 50px 16px 16px',
-                                    fontSize: isMobile ? '14px' : '16px',
-                                    border: 'none',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
                                     borderRadius: '25px',
-                                    outline: 'none',
-                                    backgroundColor: 'white',
-                                    color: '#374640'
+                                    padding: '4px',
+                                    backdropFilter: 'blur(10px)',
+                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
                                 }}
-                            />
-                            <div style={{
-                                position: 'absolute',
-                                right: isMobile ? '12px' : '16px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                fontSize: isMobile ? '16px' : '20px',
-                                color: '#6b7280'
-                            }}>
-                                🔍
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center' }}>
+                                    <input
+                                        type="text"
+                                        placeholder="Rechercher un pays..."
+                                        value={searchTerm}
+                                        onChange={handleSearchChange}
+                                        style={{
+                                            flex: 1,
+                                            padding: '16px 24px',
+                                            border: 'none',
+                                            outline: 'none',
+                                            fontSize: '16px',
+                                            backgroundColor: 'transparent',
+                                            color: '#374640',
+                                            borderRadius: '25px'
+                                        }}
+                                    />
+                                    <button
+                                        type="button"
+                                        style={{
+                                            padding: '12px 20px',
+                                            backgroundColor: 'transparent',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            fontSize: '18px',
+                                            color: '#374640',
+                                            borderRadius: '25px'
+                                        }}
+                                    >
+                                        🔍
+                                    </button>
+                                </div>
                             </div>
+
+                            {/* Indicateur de filtrage */}
+                            {isSearching && (
+                                <div style={{ marginTop: '16px', textAlign: 'center' }}>
+                                    <p style={{
+                                        color: 'white',
+                                        fontSize: '14px',
+                                        opacity: 0.8,
+                                        margin: '0 0 8px 0'
+                                    }}>
+                                        {displayedCountries.length} pays trouvé{displayedCountries.length > 1 ? 's' : ''} pour "{searchTerm}"
+                                    </p>
+                                    {displayedCountries.length === 0 && (
+                                        <button
+                                            onClick={clearSearch}
+                                            style={{
+                                                padding: '8px 16px',
+                                                border: '1px solid rgba(255,255,255,0.5)',
+                                                color: 'white',
+                                                backgroundColor: 'transparent',
+                                                borderRadius: '20px',
+                                                fontSize: '12px',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.3s'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.target.style.backgroundColor = 'rgba(255,255,255,0.1)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.target.style.backgroundColor = 'transparent';
+                                            }}
+                                        >
+                                            Effacer la recherche
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
+            </div>
 
-                {/* Barre d'outils */}
+            {/* 🎯 Container de contenu - réduit les espaces */}
+            <div style={{
+                minHeight: '60vh',
+                backgroundColor: '#ECF3F0',
+                marginTop: '-20px', // Réduit l'espace
+                position: 'relative',
+                zIndex: 10
+            }}>
                 <div style={{
-                    padding: isMobile ? '15px' : '20px 30px',
-                    backgroundColor: 'white',
-                    borderBottom: '1px solid #e5e7eb'
+                    maxWidth: '1200px',
+                    margin: '0 auto',
+                    padding: isMobile ? '40px 15px 30px' : '60px 30px 40px' // Réduit les paddings
                 }}>
+                    {/* Barre d'outils */}
                     <div style={{
-                        maxWidth: '1200px',
-                        margin: '0 auto',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: '15px'
+                        padding: isMobile ? '15px' : '20px 30px',
+                        backgroundColor: 'white',
+                        borderBottom: '1px solid #e5e7eb',
+                        borderRadius: '12px 12px 0 0'
                     }}>
-                        {/* Informations */}
                         <div style={{
-                            fontSize: isMobile ? '13px' : '14px',
-                            color: '#6b7280'
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            flexWrap: 'wrap',
+                            gap: '15px'
                         }}>
-                            {shouldSearch ? (
-                                <>Résultats pour "{searchTerm}" ({countries.length} trouvé{countries.length > 1 ? 's' : ''})</>
-                            ) : (
-                                <>Page {currentPage} sur {pagination.pages || 1} • {pagination.total || 0} pays au total</>
+                            {/* Informations */}
+                            <div style={{
+                                fontSize: isMobile ? '13px' : '14px',
+                                color: '#6b7280'
+                            }}>
+                                {isSearching ? (
+                                    <>Filtré: "{searchTerm}" ({displayedCountries.length} trouvé{displayedCountries.length > 1 ? 's' : ''})</>
+                                ) : (
+                                    <>Page {currentPage} sur {pagination.pages || 1} • {pagination.total || 0} pays au total</>
+                                )}
+                            </div>
+
+                            {/* Sélecteur de vue */}
+                            {!isMobile && (
+                                <div style={{
+                                    display: 'flex',
+                                    gap: '8px',
+                                    backgroundColor: '#f3f4f6',
+                                    borderRadius: '8px',
+                                    padding: '4px'
+                                }}>
+                                    <button
+                                        onClick={() => setViewMode('grid')}
+                                        style={{
+                                            padding: '8px 12px',
+                                            backgroundColor: viewMode === 'grid' ? '#374640' : 'transparent',
+                                            color: viewMode === 'grid' ? 'white' : '#6b7280',
+                                            border: 'none',
+                                            borderRadius: '6px',
+                                            fontSize: '12px',
+                                            fontWeight: '500',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        ⊞ Grille
+                                    </button>
+                                    <button
+                                        onClick={() => setViewMode('list')}
+                                        style={{
+                                            padding: '8px 12px',
+                                            backgroundColor: viewMode === 'list' ? '#374640' : 'transparent',
+                                            color: viewMode === 'list' ? 'white' : '#6b7280',
+                                            border: 'none',
+                                            borderRadius: '6px',
+                                            fontSize: '12px',
+                                            fontWeight: '500',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        ☰ Liste
+                                    </button>
+                                </div>
                             )}
                         </div>
+                    </div>
 
-                        {/* Sélecteur de vue */}
-                        {!isMobile && (
+                    {/* Liste des pays */}
+                    <div style={{
+                        padding: isMobile ? '20px' : '30px',
+                        backgroundColor: 'white',
+                        borderRadius: '0 0 12px 12px'
+                    }}>
+                        {displayedCountries.length === 0 ? (
                             <div style={{
-                                display: 'flex',
-                                gap: '8px',
-                                backgroundColor: '#f3f4f6',
-                                borderRadius: '8px',
-                                padding: '4px'
+                                textAlign: 'center',
+                                padding: '60px 20px',
+                                color: '#6b7280'
                             }}>
-                                <button
-                                    onClick={() => setViewMode('grid')}
-                                    style={{
-                                        padding: '8px 12px',
-                                        backgroundColor: viewMode === 'grid' ? '#374640' : 'transparent',
-                                        color: viewMode === 'grid' ? 'white' : '#6b7280',
-                                        border: 'none',
-                                        borderRadius: '6px',
-                                        fontSize: '12px',
-                                        fontWeight: '500',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s'
-                                    }}
-                                >
-                                    ⊞ Grille
-                                </button>
-                                <button
-                                    onClick={() => setViewMode('list')}
-                                    style={{
-                                        padding: '8px 12px',
-                                        backgroundColor: viewMode === 'list' ? '#374640' : 'transparent',
-                                        color: viewMode === 'list' ? 'white' : '#6b7280',
-                                        border: 'none',
-                                        borderRadius: '6px',
-                                        fontSize: '12px',
-                                        fontWeight: '500',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s'
-                                    }}
-                                >
-                                    ☰ Liste
-                                </button>
+                                <div style={{ fontSize: '64px', marginBottom: '20px' }}>🔍</div>
+                                <h3 style={{ fontSize: '20px', marginBottom: '10px', color: '#374640' }}>
+                                    {isSearching ? 'Aucun pays trouvé' : 'Aucun pays disponible'}
+                                </h3>
+                                <p style={{ fontSize: '14px' }}>
+                                    {isSearching
+                                        ? `Aucun résultat pour "${searchTerm}". Essayez avec d'autres mots-clés.`
+                                        : 'Les pays seront bientôt ajoutés à la plateforme.'
+                                    }
+                                </p>
+                                {isSearching && (
+                                    <button
+                                        onClick={clearSearch}
+                                        style={{
+                                            marginTop: '20px',
+                                            padding: '10px 20px',
+                                            backgroundColor: '#F3CB23',
+                                            color: '#374640',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            fontSize: '14px',
+                                            fontWeight: '600',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Voir tous les pays
+                                    </button>
+                                )}
                             </div>
+                        ) : (
+                            <>
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: viewMode === 'list'
+                                        ? '1fr'
+                                        : `repeat(auto-fill, minmax(${isMobile ? '280px' : '300px'}, 1fr))`,
+                                    gap: '20px'
+                                }}>
+                                    {displayedCountries.map((country) => (
+                                        <CountryCard
+                                            key={country.id}
+                                            country={country}
+                                            viewMode={isMobile ? 'grid' : viewMode}
+                                        />
+                                    ))}
+                                </div>
+
+                                {/* Pagination - seulement si pas de recherche */}
+                                <Pagination />
+                            </>
                         )}
                     </div>
                 </div>
 
-                {/* Liste des pays */}
-                <div style={{
-                    maxWidth: '1200px',
-                    margin: '0 auto',
-                    padding: isMobile ? '20px 15px' : '30px'
-                }}>
-                    {countries.length === 0 ? (
-                        <div style={{
-                            textAlign: 'center',
-                            padding: '60px 20px',
-                            color: '#6b7280'
-                        }}>
-                            <div style={{ fontSize: '64px', marginBottom: '20px' }}>🔍</div>
-                            <h3 style={{ fontSize: '20px', marginBottom: '10px', color: '#374640' }}>
-                                {shouldSearch ? 'Aucun pays trouvé' : 'Aucun pays disponible'}
-                            </h3>
-                            <p style={{ fontSize: '14px' }}>
-                                {shouldSearch
-                                    ? `Aucun résultat pour "${searchTerm}". Essayez avec d'autres mots-clés.`
-                                    : 'Les pays seront bientôt ajoutés à la plateforme.'
-                                }
-                            </p>
-                            {shouldSearch && (
-                                <button
-                                    onClick={() => setSearchTerm('')}
-                                    style={{
-                                        marginTop: '20px',
-                                        padding: '10px 20px',
-                                        backgroundColor: '#F3CB23',
-                                        color: '#374640',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        fontSize: '14px',
-                                        fontWeight: '600',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    Voir tous les pays
-                                </button>
-                            )}
-                        </div>
-                    ) : (
-                        <>
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: viewMode === 'list'
-                                    ? '1fr'
-                                    : `repeat(auto-fill, minmax(${isMobile ? '280px' : '300px'}, 1fr))`,
-                                gap: '20px'
-                            }}>
-                                {countries.map((country) => (
-                                    <CountryCard
-                                        key={country.id}
-                                        country={country}
-                                        viewMode={isMobile ? 'grid' : viewMode}
-                                    />
-                                ))}
-                            </div>
-
-                            {/* Pagination - seulement si pas en mode recherche */}
-                            {!shouldSearch && <Pagination />}
-                        </>
-                    )}
+                {/* Bouton BACK */}
+                <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                    <button
+                        onClick={handleMainNavigation}
+                        style={{
+                            padding: '12px 32px',
+                            border: '2px solid #374640',
+                            color: '#374640',
+                            backgroundColor: 'transparent',
+                            borderRadius: '25px',
+                            fontSize: '16px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            transition: 'all 0.3s',
+                            letterSpacing: '0.5px'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.target.style.backgroundColor = '#374640';
+                            e.target.style.color = 'white';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.target.style.backgroundColor = 'transparent';
+                            e.target.style.color = '#374640';
+                        }}
+                    >
+                        RETOUR
+                    </button>
                 </div>
             </div>
-        </>
+
+            {/* Footer simple */}
+            <footer className="bg-white border-t border-gray-200 py-12 relative z-30">
+                <div className="max-w-7xl mx-auto px-8">
+                    <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
+                        <div className="flex items-center space-x-4">
+                            <h3
+                                className="text-xl font-serif italic text-gray-800"
+                                style={{ fontFamily: 'Vollkorn, Georgia, serif' }}
+                            >
+                                ATLAS
+                            </h3>
+                            <span className="text-gray-400">|</span>
+                            <span className="text-sm text-gray-600 font-light">
+                                Découverte culturelle et voyage
+                            </span>
+                        </div>
+
+                        <div className="flex items-center space-x-8 text-sm text-gray-600">
+                            <span className="font-light">
+                                {displayedCountries.length} pays disponible{displayedCountries.length > 1 ? 's' : ''}
+                            </span>
+                            <button
+                                onClick={handleMainNavigation}
+                                className="hover:text-yellow-400 transition-colors font-light"
+                            >
+                                {isAuthenticated ? 'Retour au Dashboard' : 'Retour à l\'accueil'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </footer>
+        </div>
     );
 };
 

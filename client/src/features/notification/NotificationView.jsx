@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
+import { ArrowLeft } from 'lucide-react';
 import { selectUser } from '../../store/slices/authSlice';
 import {
     useCreateNotificationMutation,
@@ -7,8 +8,21 @@ import {
     useMarkAsReadMutation
 } from '../../api/endpoints/notifications';
 
-const NotificationView = ({ conversation, onBack }) => {
+// Fonction pour décoder les entités HTML
+const decodeHtmlEntities = (text) => {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = text;
+    return textarea.value;
+};
+
+const NotificationView = ({
+    conversation,
+    onBack,
+    isMobile = false,
+    screenSize = { isMobile: false, isTablet: false, isDesktop: true }
+}) => {
     const currentUser = useSelector(selectUser);
+    const currentUserId = currentUser?.id;
     const [newMessage, setNewMessage] = useState('');
     const [editingMessage, setEditingMessage] = useState(null);
     const [editText, setEditText] = useState('');
@@ -29,77 +43,96 @@ const NotificationView = ({ conversation, onBack }) => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
 
-    // 📊 Traitement des messages BIDIRECTIONNEL - LOGIQUE CORRECTE
+    // 📊 Traitement des messages COMPATIBLE (anciens + nouveaux)
     useEffect(() => {
-        if (!conversation || !notificationsData?.notifications || !currentUser) {
+        if (!conversation || !notificationsData?.notifications || !currentUserId) {
             setMessages([]);
             return;
         }
 
-        console.log('🔍 Toutes les notifications:', notificationsData.notifications);
-        console.log('👤 Current user:', currentUser.id);
-        console.log('💬 Conversation avec:', conversation.id);
-
         const conversationMessages = [];
 
-        // PARCOURIR TOUTES LES NOTIFICATIONS pour trouver celles de cette conversation
         notificationsData.notifications.forEach(notif => {
+            // 🔍 Essayer d'extraire les données SENDER (nouveaux messages)
             const senderMatch = notif.content_notification.match(/\[SENDER:(\d+)\]\[SENDER_DATA:([A-Za-z0-9+/=]+)\]/);
+            let senderId = null;
+            let isNewFormat = false;
 
             if (senderMatch) {
-                const senderId = parseInt(senderMatch[1]);
-                const cleanContent = notif.content_notification.replace(/\[SENDER:\d+\]\[SENDER_DATA:[A-Za-z0-9+/=]+\]/g, '').trim();
+                // ✅ NOUVEAU FORMAT
+                senderId = parseInt(senderMatch[1]);
+                isNewFormat = true;
 
-                // Messages REÇUS : l'autre m'envoie (senderId = conversation.id ET notif.user.id = currentUser.id)
-                if (senderId === conversation.id && notif.user_id === currentUser.id) {
-                    console.log('📨 Message REÇU de', conversation.id, ':', cleanContent);
+                const cleanContent = decodeHtmlEntities(
+                    notif.content_notification.replace(/\[SENDER:\d+\]\[SENDER_DATA:[A-Za-z0-9+/=]+\]/g, '').trim()
+                );
+
+                // Vérifier si le message appartient à cette conversation
+                const belongsToConversation =
+                    (senderId === conversation.id && notif.user_id === currentUserId) || // Message reçu
+                    (senderId === currentUserId && notif.user_id === conversation.id);   // Message envoyé
+
+                if (belongsToConversation) {
                     conversationMessages.push({
                         id: notif.id,
                         content: cleanContent,
-                        isFromMe: false,
+                        isFromMe: senderId === currentUserId,
                         isRead: notif.is_read,
                         createdAt: notif.created_at,
                         createdAtFormatted: notif.created_at_formatted,
-                        canEdit: false,
-                        timestamp: new Date(notif.created_at).getTime()
+                        canEdit: senderId === currentUserId,
+                        timestamp: new Date(notif.created_at).getTime(),
+                        isOldFormat: false
                     });
                 }
+            } else {
+                // 📱 ANCIEN FORMAT - Logique flexible pour tous les utilisateurs
+                isNewFormat = false;
 
-                // Messages ENVOYÉS : j'envoie à l'autre (senderId = currentUser.id ET notif.user_id = conversation.id)
-                if (senderId === currentUser.id && notif.user_id === conversation.id) {
-                    console.log('📤 Message ENVOYÉ vers', conversation.id, ':', cleanContent);
+                const cleanContent = decodeHtmlEntities(notif.content_notification.trim());
+                let belongsToConversation = false;
+                let isFromMe = false;
+
+                // Logique universelle pour anciens messages
+                if (notif.user_id === currentUserId) {
+                    // Message reçu - accepté pour conversation
+                    belongsToConversation = true;
+                    isFromMe = false;
+                } else if (notif.user_id === conversation.id) {
+                    // Message envoyé à cette personne
+                    belongsToConversation = true;
+                    isFromMe = true;
+                }
+
+                if (belongsToConversation) {
                     conversationMessages.push({
                         id: notif.id,
                         content: cleanContent,
-                        isFromMe: true,
-                        isRead: true,
+                        isFromMe: isFromMe,
+                        isRead: notif.is_read,
                         createdAt: notif.created_at,
                         createdAtFormatted: notif.created_at_formatted,
-                        canEdit: true,
-                        timestamp: new Date(notif.created_at).getTime()
+                        canEdit: isFromMe,
+                        timestamp: new Date(notif.created_at).getTime(),
+                        isOldFormat: true
                     });
                 }
             }
         });
 
-        console.log('📋 Total messages trouvés:', conversationMessages.length);
-
-        // Combiner avec les messages temporaires
+        // Combiner avec les messages temporaires et trier
         const allMessages = [...conversationMessages, ...tempMessages];
-
-        // Trier par timestamp
         allMessages.sort((a, b) => a.timestamp - b.timestamp);
-
         setMessages(allMessages);
 
-        // Marquer comme lu INSTANTANÉMENT (seulement les messages reçus)
+        // Marquer les messages reçus comme lus
         conversationMessages.forEach(msg => {
             if (!msg.isRead && !msg.isFromMe) {
-                markAsRead(msg.id);
+                markAsRead(msg.id).catch(err => console.error('Erreur marquage lu:', err));
             }
         });
 
-    }, [conversation, notificationsData, tempMessages, markAsRead, currentUser]);
+    }, [conversation, notificationsData, tempMessages, markAsRead, currentUserId]);
 
     // 🔄 Scroll vers le bas quand nouveaux messages
     useEffect(() => {
@@ -112,10 +145,10 @@ const NotificationView = ({ conversation, onBack }) => {
 
         const interval = setInterval(() => {
             refetch();
-        }, 500);
+        }, screenSize.isMobile ? 1000 : 500);
 
         return () => clearInterval(interval);
-    }, [conversation, refetch]);
+    }, [conversation, refetch, screenSize.isMobile]);
 
     // Auto-resize textarea
     useEffect(() => {
@@ -139,10 +172,10 @@ const NotificationView = ({ conversation, onBack }) => {
             createdAtFormatted: "À l'instant",
             canEdit: true,
             status: 'sending',
-            timestamp: now
+            timestamp: now,
+            isOldFormat: false
         };
 
-        // ⚡ Affichage INSTANTANÉ
         setTempMessages(prev => [...prev, tempMessage]);
         const messageToSend = newMessage.trim();
         setNewMessage('');
@@ -150,20 +183,18 @@ const NotificationView = ({ conversation, onBack }) => {
         setTimeout(scrollToBottom, 10);
 
         try {
-            const response = await createNotification({
+            await createNotification({
                 recipient_id: conversation.id,
                 type_notification: 'message',
                 content_notification: messageToSend
             }).unwrap();
 
-            // Mettre à jour le message temporaire
             setTempMessages(prev => prev.map(msg =>
                 msg.id === tempId
                     ? { ...msg, status: 'sent' }
                     : msg
             ));
 
-            // Rafraîchir et nettoyer
             setTimeout(() => {
                 refetch();
                 setTimeout(() => {
@@ -189,7 +220,7 @@ const NotificationView = ({ conversation, onBack }) => {
     };
 
     const handleEditMessage = (message) => {
-        if (!message.canEdit) return;
+        if (!message.canEdit || message.status === 'sending' || message.isOldFormat) return;
         setEditingMessage(message.id);
         setEditText(message.content);
     };
@@ -222,7 +253,7 @@ const NotificationView = ({ conversation, onBack }) => {
 
     const adjustTextareaHeight = (textarea) => {
         textarea.style.height = 'auto';
-        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+        textarea.style.height = Math.min(textarea.scrollHeight, screenSize.isMobile ? 100 : 120) + 'px';
     };
 
     if (!conversation) {
@@ -237,34 +268,37 @@ const NotificationView = ({ conversation, onBack }) => {
                 backgroundImage: `
                     radial-gradient(circle at 25% 25%, rgba(55, 70, 64, 0.1) 0%, transparent 50%),
                     radial-gradient(circle at 75% 75%, rgba(16, 185, 129, 0.1) 0%, transparent 50%)
-                `
+                `,
+                padding: screenSize.isMobile ? '20px' : '60px 40px'
             }}>
                 <div style={{
                     textAlign: 'center',
                     color: '#374640',
-                    padding: '60px 40px',
-                    maxWidth: '500px'
+                    maxWidth: screenSize.isMobile ? '280px' : '500px'
                 }}>
                     <div style={{
-                        fontSize: '80px',
-                        marginBottom: '24px',
+                        fontSize: screenSize.isMobile ? '60px' : '80px',
+                        marginBottom: screenSize.isMobile ? '16px' : '24px',
                         filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.1))'
                     }}>💬</div>
                     <h3 style={{
                         margin: '0 0 12px 0',
                         color: '#374640',
-                        fontSize: '24px',
+                        fontSize: screenSize.isMobile ? '20px' : '24px',
                         fontWeight: '600'
                     }}>
-                        Sélectionnez une conversation
+                        {screenSize.isMobile ? 'Sélectionnez un contact' : 'Sélectionnez une conversation'}
                     </h3>
                     <p style={{
                         margin: 0,
                         color: '#6b7280',
-                        fontSize: '16px',
+                        fontSize: screenSize.isMobile ? '14px' : '16px',
                         lineHeight: '1.5'
                     }}>
-                        Choisissez une conversation pour commencer à échanger
+                        {screenSize.isMobile ?
+                            'Choisissez un contact pour commencer' :
+                            'Choisissez une conversation pour commencer à échanger'
+                        }
                     </p>
                 </div>
             </div>
@@ -276,27 +310,56 @@ const NotificationView = ({ conversation, onBack }) => {
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
-            backgroundColor: 'white'
+            backgroundColor: 'white',
+            height: '100%'
         }}>
-            {/* Header simplifié */}
+            {/* Header responsive - couleur verte uniforme */}
             <div style={{
-                padding: '16px 24px',
+                padding: screenSize.isMobile ? '12px 16px' : '16px 24px',
                 borderBottom: '1px solid #e5e7eb',
-                background: 'linear-gradient(135deg, #374640 0%, #2d3a32 100%)',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '16px',
+                gap: screenSize.isMobile ? '12px' : '16px',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
             }}>
-                {/* Avatar avec point vert */}
+                {/* Bouton retour mobile */}
+                {screenSize.isMobile && (
+                    <button
+                        onClick={onBack}
+                        style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            border: 'none',
+                            borderRadius: '50%',
+                            width: '36px',
+                            height: '36px',
+                            cursor: 'pointer',
+                            color: 'white',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.2s'
+                        }}
+                        onMouseOver={(e) => {
+                            e.target.style.backgroundColor = 'rgba(255,255,255,0.2)';
+                        }}
+                        onMouseOut={(e) => {
+                            e.target.style.backgroundColor = 'rgba(255,255,255,0.1)';
+                        }}
+                    >
+                        <ArrowLeft size={18} />
+                    </button>
+                )}
+
+                {/* Avatar adaptatif - vert */}
                 <div style={{ position: 'relative' }}>
                     {conversation.avatar ? (
                         <img
                             src={conversation.avatar}
                             alt={conversation.name}
                             style={{
-                                width: '48px',
-                                height: '48px',
+                                width: screenSize.isMobile ? '40px' : '48px',
+                                height: screenSize.isMobile ? '40px' : '48px',
                                 borderRadius: '50%',
                                 objectFit: 'cover',
                                 border: '2px solid rgba(255,255,255,0.2)'
@@ -304,14 +367,14 @@ const NotificationView = ({ conversation, onBack }) => {
                         />
                     ) : (
                         <div style={{
-                            width: '48px',
-                            height: '48px',
+                            width: screenSize.isMobile ? '40px' : '48px',
+                            height: screenSize.isMobile ? '40px' : '48px',
                             borderRadius: '50%',
-                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            fontSize: '20px',
+                            fontSize: screenSize.isMobile ? '16px' : '20px',
                             color: 'white',
                             fontWeight: '600',
                             border: '2px solid rgba(255,255,255,0.2)'
@@ -320,32 +383,32 @@ const NotificationView = ({ conversation, onBack }) => {
                         </div>
                     )}
 
-                    {/* Point vert décoratif */}
+                    {/* Point indicateur vert */}
                     <div style={{
                         position: 'absolute',
                         bottom: '2px',
                         right: '2px',
-                        width: '12px',
-                        height: '12px',
-                        backgroundColor: '#10b981',
+                        width: screenSize.isMobile ? '10px' : '12px',
+                        height: screenSize.isMobile ? '10px' : '12px',
+                        backgroundColor: '#22c55e',
                         borderRadius: '50%',
                         border: '2px solid white',
-                        boxShadow: '0 0 6px rgba(16, 185, 129, 0.6)'
+                        boxShadow: '0 0 6px rgba(34, 197, 94, 0.6)'
                     }} />
                 </div>
 
-                {/* Info conversation */}
+                {/* Info conversation - sans badges */}
                 <div style={{ flex: 1 }}>
                     <h3 style={{
                         margin: '0 0 4px 0',
                         color: 'white',
-                        fontSize: '18px',
+                        fontSize: screenSize.isMobile ? '16px' : '18px',
                         fontWeight: '600'
                     }}>
                         {conversation.name}
                     </h3>
                     <div style={{
-                        fontSize: '13px',
+                        fontSize: screenSize.isMobile ? '12px' : '13px',
                         color: 'rgba(255,255,255,0.8)'
                     }}>
                         @{conversation.pseudo}
@@ -353,10 +416,10 @@ const NotificationView = ({ conversation, onBack }) => {
                 </div>
             </div>
 
-            {/* Messages */}
+            {/* Messages responsive */}
             <div style={{
                 flex: 1,
-                padding: '20px',
+                padding: screenSize.isMobile ? '15px' : '20px',
                 overflow: 'auto',
                 backgroundColor: '#ECF3F0',
                 backgroundImage: `
@@ -368,11 +431,17 @@ const NotificationView = ({ conversation, onBack }) => {
                 {messages.length === 0 ? (
                     <div style={{
                         textAlign: 'center',
-                        padding: '60px 20px',
+                        padding: screenSize.isMobile ? '40px 15px' : '60px 20px',
                         color: '#6b7280'
                     }}>
-                        <div style={{ fontSize: '48px', marginBottom: '16px' }}>✨</div>
-                        <p style={{ margin: 0, fontSize: '16px' }}>
+                        <div style={{
+                            fontSize: screenSize.isMobile ? '32px' : '48px',
+                            marginBottom: screenSize.isMobile ? '12px' : '16px'
+                        }}>✨</div>
+                        <p style={{
+                            margin: 0,
+                            fontSize: screenSize.isMobile ? '14px' : '16px'
+                        }}>
                             Commencez votre conversation avec {conversation.name}
                         </p>
                     </div>
@@ -381,8 +450,9 @@ const NotificationView = ({ conversation, onBack }) => {
                         const isEditing = editingMessage === message.id;
 
                         return (
-                            <div key={message.id || `temp-${index}`} style={{ marginBottom: '12px' }}>
-                                {/* Message bubble */}
+                            <div key={message.id || `temp-${index}`} style={{
+                                marginBottom: screenSize.isMobile ? '8px' : '12px'
+                            }}>
                                 <div style={{
                                     display: 'flex',
                                     justifyContent: message.isFromMe ? 'flex-end' : 'flex-start',
@@ -390,34 +460,34 @@ const NotificationView = ({ conversation, onBack }) => {
                                 }}>
                                     <div
                                         style={{
-                                            maxWidth: '70%',
-                                            padding: '12px 16px',
+                                            maxWidth: screenSize.isMobile ? '85%' : '70%',
+                                            padding: screenSize.isMobile ? '10px 14px' : '12px 16px',
                                             borderRadius: message.isFromMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
                                             backgroundColor: message.isFromMe ?
                                                 (message.status === 'sending' ? '#d1fae5' :
-                                                    message.status === 'failed' ? '#fee2e2' : '#10b981') :
+                                                    message.status === 'failed' ? '#fee2e2' : '#22c55e') : // ✅ Vert clair
                                                 'white',
                                             color: message.isFromMe ?
                                                 (message.status === 'sending' ? '#065f46' :
                                                     message.status === 'failed' ? '#991b1b' : 'white') :
                                                 '#374640',
                                             boxShadow: message.isFromMe ?
-                                                '0 2px 8px rgba(16, 185, 129, 0.3)' :
+                                                '0 2px 8px rgba(34, 197, 94, 0.3)' :
                                                 '0 2px 8px rgba(0,0,0,0.1)',
                                             position: 'relative',
-                                            cursor: message.canEdit ? 'pointer' : 'default',
+                                            cursor: (message.canEdit && !message.status && !message.isOldFormat) ? 'pointer' : 'default',
                                             transition: 'all 0.2s',
                                             wordBreak: 'break-word'
                                         }}
                                         onClick={() => handleEditMessage(message)}
                                         onMouseOver={(e) => {
-                                            if (message.canEdit && !isEditing) {
-                                                e.target.style.transform = 'scale(1.02)';
+                                            if (message.canEdit && !isEditing && !screenSize.isMobile && !message.status && !message.isOldFormat) {
+                                                e.currentTarget.style.transform = 'scale(1.02)';
                                             }
                                         }}
                                         onMouseOut={(e) => {
-                                            if (message.canEdit && !isEditing) {
-                                                e.target.style.transform = 'scale(1)';
+                                            if (message.canEdit && !isEditing && !screenSize.isMobile && !message.status && !message.isOldFormat) {
+                                                e.currentTarget.style.transform = 'scale(1)';
                                             }
                                         }}
                                     >
@@ -431,7 +501,7 @@ const NotificationView = ({ conversation, onBack }) => {
                                                         outline: 'none',
                                                         backgroundColor: 'transparent',
                                                         color: 'inherit',
-                                                        fontSize: '14px',
+                                                        fontSize: screenSize.isMobile ? '13px' : '14px',
                                                         resize: 'none',
                                                         minHeight: '20px',
                                                         fontFamily: 'inherit',
@@ -459,8 +529,8 @@ const NotificationView = ({ conversation, onBack }) => {
                                                             color: 'inherit',
                                                             border: 'none',
                                                             borderRadius: '4px',
-                                                            padding: '4px 8px',
-                                                            fontSize: '11px',
+                                                            padding: screenSize.isMobile ? '3px 6px' : '4px 8px',
+                                                            fontSize: '10px',
                                                             cursor: 'pointer'
                                                         }}
                                                     >
@@ -473,11 +543,11 @@ const NotificationView = ({ conversation, onBack }) => {
                                                         }}
                                                         style={{
                                                             backgroundColor: 'rgba(255,255,255,0.9)',
-                                                            color: '#10b981',
+                                                            color: '#22c55e',
                                                             border: 'none',
                                                             borderRadius: '4px',
-                                                            padding: '4px 8px',
-                                                            fontSize: '11px',
+                                                            padding: screenSize.isMobile ? '3px 6px' : '4px 8px',
+                                                            fontSize: '10px',
                                                             cursor: 'pointer',
                                                             fontWeight: '600'
                                                         }}
@@ -489,7 +559,7 @@ const NotificationView = ({ conversation, onBack }) => {
                                         ) : (
                                             <>
                                                 <div style={{
-                                                    fontSize: '14px',
+                                                    fontSize: screenSize.isMobile ? '13px' : '14px',
                                                     lineHeight: '1.4',
                                                     whiteSpace: 'pre-wrap',
                                                     marginBottom: '4px'
@@ -497,19 +567,19 @@ const NotificationView = ({ conversation, onBack }) => {
                                                     {message.content}
                                                 </div>
 
-                                                {/* Status et time */}
+                                                {/* Status et time - sans badges anciens */}
                                                 <div style={{
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'space-between',
                                                     gap: '8px',
-                                                    fontSize: '11px',
+                                                    fontSize: screenSize.isMobile ? '10px' : '11px',
                                                     color: message.isFromMe ? 'rgba(255,255,255,0.8)' : '#9ca3af'
                                                 }}>
                                                     <span>{message.createdAtFormatted}</span>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                         {message.edited && <span title="Message édité">✏️</span>}
-                                                        {message.canEdit && (
+                                                        {message.canEdit && !screenSize.isMobile && !message.status && !message.isOldFormat && (
                                                             <svg
                                                                 width="12"
                                                                 height="12"
@@ -521,7 +591,7 @@ const NotificationView = ({ conversation, onBack }) => {
                                                             </svg>
                                                         )}
                                                         {message.isFromMe && (
-                                                            <span style={{ fontSize: '12px' }}>
+                                                            <span style={{ fontSize: screenSize.isMobile ? '10px' : '12px' }}>
                                                                 {message.status === 'sending' ? '⏳' :
                                                                     message.status === 'failed' ? '❌' : '✓✓'}
                                                             </span>
@@ -539,20 +609,20 @@ const NotificationView = ({ conversation, onBack }) => {
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* Zone de saisie simplifiée */}
+            {/* Zone de saisie responsive */}
             <div style={{
-                padding: '16px 20px',
+                padding: screenSize.isMobile ? '12px 16px' : '16px 20px',
                 borderTop: '1px solid #e5e7eb',
                 backgroundColor: 'white',
                 display: 'flex',
                 alignItems: 'flex-end',
-                gap: '12px'
+                gap: screenSize.isMobile ? '8px' : '12px'
             }}>
-                {/* Zone de texte */}
+                {/* Zone de texte responsive */}
                 <div style={{
                     flex: 1,
                     backgroundColor: '#f9fafb',
-                    borderRadius: '24px',
+                    borderRadius: screenSize.isMobile ? '20px' : '24px',
                     border: '1px solid #e5e7eb',
                     display: 'flex',
                     alignItems: 'flex-end',
@@ -571,12 +641,12 @@ const NotificationView = ({ conversation, onBack }) => {
                             flex: 1,
                             border: 'none',
                             outline: 'none',
-                            padding: '12px 16px',
-                            fontSize: '14px',
+                            padding: screenSize.isMobile ? '10px 14px' : '12px 16px',
+                            fontSize: screenSize.isMobile ? '13px' : '14px',
                             backgroundColor: 'transparent',
                             resize: 'none',
                             minHeight: '20px',
-                            maxHeight: '120px',
+                            maxHeight: screenSize.isMobile ? '100px' : '120px',
                             fontFamily: 'inherit',
                             lineHeight: '1.4'
                         }}
@@ -584,24 +654,24 @@ const NotificationView = ({ conversation, onBack }) => {
                     />
                 </div>
 
-                {/* Bouton d'envoi */}
+                {/* Bouton d'envoi responsive - vert */}
                 <button
                     onClick={handleSendMessage}
                     disabled={!newMessage.trim() || isSending}
                     style={{
-                        backgroundColor: newMessage.trim() ? '#10b981' : '#d1d5db',
+                        backgroundColor: newMessage.trim() ? '#22c55e' : '#d1d5db',
                         border: 'none',
                         borderRadius: '50%',
-                        width: '44px',
-                        height: '44px',
+                        width: screenSize.isMobile ? '40px' : '44px',
+                        height: screenSize.isMobile ? '40px' : '44px',
                         cursor: newMessage.trim() && !isSending ? 'pointer' : 'not-allowed',
-                        fontSize: '18px',
+                        fontSize: screenSize.isMobile ? '16px' : '18px',
                         color: 'white',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         transition: 'all 0.2s',
-                        boxShadow: newMessage.trim() ? '0 2px 8px rgba(16, 185, 129, 0.3)' : 'none',
+                        boxShadow: newMessage.trim() ? '0 2px 8px rgba(34, 197, 94, 0.3)' : 'none',
                         transform: isSending ? 'scale(0.95)' : 'scale(1)'
                     }}
                 >

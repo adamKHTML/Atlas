@@ -16,6 +16,10 @@ use Psr\Log\LoggerInterface;
 
 class RegisterController extends AbstractController
 {
+    // Constantes de sécurité
+    private const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+    private const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    
     public function __construct(
         private EntityManagerInterface $entityManager,
         private UserPasswordHasherInterface $passwordHasher,
@@ -27,184 +31,231 @@ class RegisterController extends AbstractController
     #[Route('/api/register', name: 'api_register', methods: ['POST'])]
     public function register(Request $request): JsonResponse
     {
-        // Logs pour débogage
-        $this->logger->debug('Requête d\'inscription reçue', [
+        // 1. Logs de sécurité
+        $this->logger->info('Registration attempt', [
+            'ip' => $request->getClientIp(),
+            'user_agent' => $request->headers->get('User-Agent'),
             'content_type' => $request->headers->get('Content-Type'),
-            'content_length' => $request->headers->get('Content-Length'),
             'has_files' => $request->files->count() > 0,
-            'files' => array_keys($request->files->all()),
             'fields' => array_keys($request->request->all())
         ]);
         
-        // Traitement direct du FormData comme dans votre ProductController
         $data = $request->request->all();
         $profilePicture = $request->files->get('profile_picture');
         
         if (empty($data)) {
-            $this->logger->error('Aucune donnée reçue pour l\'inscription');
+            $this->logger->error('No data received for registration', [
+                'ip' => $request->getClientIp()
+            ]);
             return $this->jsonResponse(['error' => 'No data received. Please check your request format.'], Response::HTTP_BAD_REQUEST);
         }
         
-        // Validation de base
-        if (!isset($data['email'], $data['password'], $data['pseudo'], $data['firstname'], $data['lastname'])) {
-            $this->logger->error('Champs obligatoires manquants', ['received' => array_keys($data)]);
-            return $this->jsonResponse(['error' => 'Missing required fields: email, password, pseudo, firstname, lastname'], Response::HTTP_BAD_REQUEST);
+        // 2. Validation et sanitisation des données
+        try {
+            $sanitizedData = $this->sanitizeAndValidateData($data);
+        } catch (\InvalidArgumentException $e) {
+            $this->logger->warning('Data validation failed', [
+                'error' => $e->getMessage(),
+                'ip' => $request->getClientIp()
+            ]);
+            return $this->jsonResponse(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
-        
-        // Validations supplémentaires
-        $errors = [];
-        if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
-            $errors[] = 'Email invalide';
+
+        // 3. Validation de la photo de profil
+        if ($profilePicture) {
+            try {
+                $this->validateProfilePicture($profilePicture);
+            } catch (\InvalidArgumentException $e) {
+                $this->logger->warning('Profile picture validation failed', [
+                    'error' => $e->getMessage(),
+                    'ip' => $request->getClientIp()
+                ]);
+                return $this->jsonResponse(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+            }
         }
-        
-        if (strlen($data['password']) < 8) {
-            $errors[] = 'Le mot de passe doit faire au moins 8 caractères';
+
+        // 4. Vérification unicité email et pseudo
+        if ($this->entityManager->getRepository(User::class)->findOneBy(['email' => $sanitizedData['email']])) {
+            return $this->jsonResponse(['error' => 'Un compte avec cette adresse email existe déjà.'], Response::HTTP_CONFLICT);
         }
-        
-        if (strlen($data['pseudo']) < 3) {
-            $errors[] = 'Le pseudo doit faire au moins 3 caractères';
-        }
-        
-        if (!empty($errors)) {
-            return $this->jsonResponse(['errors' => $errors], Response::HTTP_BAD_REQUEST);
-        }
-        
-        // Vérifier si un utilisateur existe déjà avec cet email
-        if ($this->entityManager->getRepository(User::class)->findOneBy(['email' => $data['email']])) {
-            return $this->jsonResponse(['error' => 'Email already exists'], Response::HTTP_CONFLICT);
+
+        if ($this->entityManager->getRepository(User::class)->findOneBy(['pseudo' => $sanitizedData['pseudo']])) {
+            return $this->jsonResponse(['error' => 'Ce pseudo est déjà utilisé.'], Response::HTTP_CONFLICT);
         }
         
         try {
-            // Créer l'utilisateur
+            // 5. Création sécurisée de l'utilisateur
             $user = new User();
-            $user->setEmail($data['email'])
-                ->setPseudo($data['pseudo'])
-                ->setFirstname($data['firstname'])
-                ->setLastname($data['lastname'])
+            $user->setEmail($sanitizedData['email'])
+                ->setPseudo($sanitizedData['pseudo'])
+                ->setFirstname($sanitizedData['firstname'])
+                ->setLastname($sanitizedData['lastname'])
                 ->setRoles(['ROLE_USER'])
-                ->setPassword($this->passwordHasher->hashPassword($user, $data['password']))
+                ->setPassword($this->passwordHasher->hashPassword($user, $sanitizedData['password']))
                 ->setIsVerified(false);
             
-            // Gérer la photo de profil s'il y en a une
+            // 6. Upload sécurisé de la photo
             if ($profilePicture) {
-                $destination = $this->getParameter('kernel.project_dir') . '/public/uploads/avatars';
-                if (!file_exists($destination) && !mkdir($destination, 0777, true)) {
-                    throw new \RuntimeException('Impossible de créer le dossier uploads/avatars');
-                }
-                
-                $filename = uniqid() . '.' . $profilePicture->guessExtension();
-                $profilePicture->move($destination, $filename);
-                $user->setProfilePicture('/uploads/avatars/' . $filename);
-                
-                $this->logger->info('Avatar uploadé', ['filename' => $filename]);
+                $profilePicturePath = $this->handleSecureFileUpload($profilePicture);
+                $user->setProfilePicture($profilePicturePath);
             }
             
-            // Persister l'utilisateur avant de générer le token
             $this->entityManager->persist($user);
             $this->entityManager->flush();
             
-            // Générer un token avec TokenManager
+            // 7. Génération du token
             $plainToken = $this->tokenManager->generateEmailVerificationToken($user);
             
-            // Log du token pour débogage
-            $this->logger->debug('Token généré pour l\'utilisateur', [
+            $this->logger->info('User successfully registered', [
                 'user_id' => $user->getId(),
-                'token_preview' => substr($plainToken, 0, 8) . '...',
-                'token_length' => strlen($plainToken)
+                'email' => $user->getEmail(),
+                'ip' => $request->getClientIp()
             ]);
             
-            // Envoyer l'email de vérification
+            // 8. Envoi email
             try {
                 $this->mailerService->sendVerificationEmail($user, $plainToken);
-                $this->logger->info('Email de vérification envoyé', ['user_id' => $user->getId()]);
             } catch (\Exception $e) {
-                $this->logger->error('Échec d\'envoi de l\'email de vérification', [
+                $this->logger->error('Failed to send verification email', [
                     'user_id' => $user->getId(),
                     'error' => $e->getMessage()
                 ]);
-                // On continue même si l'envoi d'email échoue
             }
             
             return $this->jsonResponse([
                 'message' => 'User created successfully. Please check your email to verify your account.',
                 'user' => [
                     'id' => $user->getId(),
-                    'email' => $user->getEmail(),
+                    'email' => $this->obfuscateEmail($user->getEmail()),
                     'pseudo' => $user->getPseudo(),
                     'profilePicture' => $user->getProfilePicture(),
                     'isVerified' => $user->isVerified()
                 ]
             ], Response::HTTP_CREATED);
+            
         } catch (\Exception $e) {
-            $this->logger->error('Échec de l\'inscription', [
+            $this->logger->error('Registration failed', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'ip' => $request->getClientIp()
             ]);
             return $this->jsonResponse(['error' => 'An error occurred during registration: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
-    
-    // Route de débogage des tokens
-    #[Route('/api/debug-tokens', name: 'api_debug_tokens', methods: ['GET'])]
-    public function debugTokens(): JsonResponse
+
+    /**
+     * 🛡️ NOUVELLES MÉTHODES DE SÉCURITÉ À AJOUTER
+     */
+
+    private function sanitizeAndValidateData(array $data): array
     {
-        // Récupérer tous les utilisateurs avec des tokens
-        $users = $this->entityManager->getRepository(User::class)->findAll();
-        $tokens = [];
-        
-        foreach ($users as $user) {
-            if ($user->getVerificationToken()) {
-                $tokens[] = [
-                    'user_id' => $user->getId(),
-                    'email' => $user->getEmail(),
-                    'token_preview' => substr($user->getVerificationToken(), 0, 15) . '...',
-                    'is_hashed' => strpos($user->getVerificationToken(), TokenManager::TOKEN_PREFIX) === 0,
-                    'expires_at' => $user->getVerificationTokenExpiresAt() 
-                        ? $user->getVerificationTokenExpiresAt()->format('Y-m-d H:i:s') 
-                        : null,
-                    'is_verified' => $user->isVerified()
-                ];
-            }
+        $errors = [];
+
+        // Validation email
+        if (!isset($data['email']) || !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'Email invalide';
         }
-        
-        return $this->jsonResponse([
-            'tokens_count' => count($tokens),
-            'tokens' => $tokens
-        ]);
+
+        // Validation pseudo (sécurisé)
+        if (!isset($data['pseudo']) || !preg_match('/^[a-zA-Z0-9_-]{3,30}$/', $data['pseudo'])) {
+            $errors[] = 'Le pseudo doit contenir 3-30 caractères (lettres, chiffres, - et _ uniquement)';
+        }
+
+        // Validation noms
+        if (!isset($data['firstname']) || !preg_match('/^[a-zA-ZÀ-ÿ\s\'-]{1,50}$/u', $data['firstname'])) {
+            $errors[] = 'Prénom invalide';
+        }
+
+        if (!isset($data['lastname']) || !preg_match('/^[a-zA-ZÀ-ÿ\s\'-]{1,50}$/u', $data['lastname'])) {
+            $errors[] = 'Nom invalide';
+        }
+
+        // Validation mot de passe fort
+        if (!isset($data['password']) || !$this->isStrongPassword($data['password'])) {
+            $errors[] = 'Mot de passe trop faible (8+ caractères avec maj, min, chiffre et caractère spécial)';
+        }
+
+        if (!empty($errors)) {
+            throw new \InvalidArgumentException(implode(', ', $errors));
+        }
+
+        // Sanitisation
+        return [
+            'email' => filter_var(trim($data['email']), FILTER_SANITIZE_EMAIL),
+            'pseudo' => htmlspecialchars(trim($data['pseudo']), ENT_QUOTES, 'UTF-8'),
+            'firstname' => htmlspecialchars(trim($data['firstname']), ENT_QUOTES, 'UTF-8'),
+            'lastname' => htmlspecialchars(trim($data['lastname']), ENT_QUOTES, 'UTF-8'),
+            'password' => $data['password']
+        ];
     }
-    
-    // Route pour tester la vérification d'un token spécifique
-    #[Route('/api/test-verify/{token}', name: 'api_test_verify', methods: ['GET'])]
-    public function testVerify(string $token): JsonResponse
+
+    private function isStrongPassword(string $password): bool
     {
-        // Hasher le token pour voir
-        $hashedToken = TokenManager::TOKEN_PREFIX . hash('sha256', $token);
-        
-        // Chercher avec les deux formats
-        $userWithPlain = $this->entityManager->getRepository(User::class)
-            ->findOneBy(['verificationToken' => $token]);
-        
-        $userWithHashed = $this->entityManager->getRepository(User::class)
-            ->findOneBy(['verificationToken' => $hashedToken]);
-        
-        return $this->jsonResponse([
-            'input_token' => $token,
-            'input_token_preview' => substr($token, 0, 8) . '...',
-            'hashed_version' => $hashedToken,
-            'hashed_version_preview' => substr($hashedToken, 0, 15) . '...',
-            'found_with_plain' => $userWithPlain ? [
-                'id' => $userWithPlain->getId(),
-                'email' => $userWithPlain->getEmail()
-            ] : null,
-            'found_with_hashed' => $userWithHashed ? [
-                'id' => $userWithHashed->getId(),
-                'email' => $userWithHashed->getEmail()
-            ] : null
-        ]);
+        return strlen($password) >= 8 
+            && preg_match('/[a-z]/', $password)
+            && preg_match('/[A-Z]/', $password)
+            && preg_match('/[0-9]/', $password)
+            && preg_match('/[^A-Za-z0-9]/', $password);
     }
-    
+
+    private function validateProfilePicture($file): void
+    {
+        // Taille
+        if ($file->getSize() > self::MAX_FILE_SIZE) {
+            throw new \InvalidArgumentException('Fichier trop volumineux (2MB max)');
+        }
+
+        // Type MIME
+        if (!in_array($file->getMimeType(), self::ALLOWED_MIME_TYPES)) {
+            throw new \InvalidArgumentException('Format non autorisé (JPG, PNG, GIF, WebP uniquement)');
+        }
+
+        // Vérification que c'est vraiment une image
+        if (!@getimagesize($file->getPathname())) {
+            throw new \InvalidArgumentException('Fichier corrompu ou non valide');
+        }
+    }
+
+    private function handleSecureFileUpload($file): string
+    {
+        $uploadDir = $this->getParameter('kernel.project_dir') . '/public/uploads/avatars';
+        
+        if (!file_exists($uploadDir) && !mkdir($uploadDir, 0755, true)) {
+            throw new \RuntimeException('Impossible de créer le dossier de destination');
+        }
+
+        // Nom sécurisé
+        $extension = strtolower($file->getClientOriginalExtension());
+        $filename = bin2hex(random_bytes(16)) . '.' . $extension;
+        
+        $file->move($uploadDir, $filename);
+
+        $this->logger->info('File uploaded successfully', ['filename' => $filename]);
+
+        return '/uploads/avatars/' . $filename;
+    }
+
+    private function obfuscateEmail(string $email): string
+    {
+        $parts = explode('@', $email);
+        if (count($parts) !== 2) return $email;
+
+        $local = $parts[0];
+        $obfuscated = substr($local, 0, 2) . str_repeat('*', max(0, strlen($local) - 2));
+        
+        return $obfuscated . '@' . $parts[1];
+    }
+
     private function jsonResponse($data, int $status = Response::HTTP_OK): JsonResponse
     {
-        return new JsonResponse($data, $status);
+        $response = new JsonResponse($data, $status);
+        
+        // Headers de sécurité
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        $response->headers->set('X-Frame-Options', 'DENY');
+        $response->headers->set('X-XSS-Protection', '1; mode=block');
+        
+        return $response;
     }
+
+    // Garde tes autres méthodes existantes (debug-tokens, test-verify, etc.)
 }

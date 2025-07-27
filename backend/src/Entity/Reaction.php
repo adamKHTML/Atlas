@@ -32,6 +32,12 @@ class Reaction
         return $this->type;
     }
 
+    
+    public function getType(): ?bool
+    {
+        return $this->type;
+    }
+
     public function setType(bool $type): static
     {
         $this->type = $type;

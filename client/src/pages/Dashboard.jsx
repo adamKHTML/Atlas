@@ -1,3 +1,4 @@
+// src/pages/Dashboard.jsx - Version avec statistiques améliorées
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
@@ -5,6 +6,8 @@ import { selectUser, selectIsAdmin, selectIsAuthenticated } from '../store/slice
 import { useLogoutMutation } from '../api/endpoints/auth';
 import { useGetCountriesForDashboardQuery } from '../api/endpoints/countries';
 import { useGetUnreadCountQuery } from '../api/endpoints/notifications';
+// Plus besoin de l'import pour l'instant
+import SearchComponent from '../components/SearchComponents';
 
 const Dashboard = () => {
     const user = useSelector(selectUser);
@@ -24,10 +27,22 @@ const Dashboard = () => {
     const { data: unreadData } = useGetUnreadCountQuery();
     const unreadCount = unreadData?.unread_count || 0;
 
+    // 📊 Récupérer les statistiques depuis Redux (rapide) + optionnel Analytics (complet)
+    const userStats = user?.stats || {
+        topics_created: 0,
+        discussions_created: 0,
+        messages_sent: 0,
+        countries_visited: 0
+    };
+
+    // 📈 Pour les admins : récupérer les analytics complètes (optionnel - désactivé temporairement)
+    // const { data: analyticsData } = isAdmin ? useGetGlobalStatsQuery() : { data: null };
+    const analyticsData = null; // Temporaire
+
     // Vérifier si l'utilisateur est modérateur
     const isModerator = user?.roles?.includes('ROLE_MODERATOR');
 
-    // Actions admin
+    // Actions selon le rôle (même structure que précédemment)
     const adminActions = [
         {
             title: "Créer un pays",
@@ -60,7 +75,6 @@ const Dashboard = () => {
         }
     ];
 
-    // Actions modérateur
     const moderatorActions = [
         {
             title: "Mes Notifications",
@@ -93,7 +107,6 @@ const Dashboard = () => {
         }
     ];
 
-    // Actions voyageur/user
     const travelerActions = [
         {
             title: "Mes Notifications",
@@ -126,14 +139,13 @@ const Dashboard = () => {
         }
     ];
 
-    // Vérifier l'authentification
+    // Vérification de l'authentification
     useEffect(() => {
         if (!isAuthenticated) {
             navigate('/login');
         }
     }, [isAuthenticated, navigate]);
 
-    // Fonction pour déconnecter l'utilisateur
     const handleLogout = async () => {
         try {
             await logout().unwrap();
@@ -151,12 +163,10 @@ const Dashboard = () => {
         navigate(`/country/${countryId}`);
     };
 
-    // 🆕 COMPOSANT CARTE STYLE COMPACT ET CORRIGÉ
+    // Composant CountryCard (même que précédemment)
     const CountryCard = ({ country }) => {
-        // 🔧 CORRECTION FINALE : URL complète avec serveur backend
         const getCountryImage = () => {
             if (country.country_image) {
-                // ✅ Ajouter l'URL du backend Symfony (port 8000)
                 return `http://localhost:8000${country.country_image}`;
             }
             return country.flag_url;
@@ -167,55 +177,60 @@ const Dashboard = () => {
                 onClick={() => handleCountryClick(country.id)}
                 style={{
                     position: 'relative',
-                    width: '40%',
-                    height: '200px',
-                    borderRadius: '16px',
+                    borderRadius: '20px',
                     overflow: 'hidden',
                     cursor: 'pointer',
-                    transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-                    boxShadow: '0 3px 12px rgba(0,0,0,0.08)',
-                    background: 'linear-gradient(135deg, #4a5c52 0%, #2d3d32 100%)'
+                    transition: 'all 0.3s ease',
+                    backgroundColor: '#4a5c52',
+                    height: '280px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
                 }}
                 onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-3px)';
-                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)';
+                    e.currentTarget.style.transform = 'translateY(-8px)';
+                    e.currentTarget.style.boxShadow = '0 16px 40px rgba(0,0,0,0.25)';
                 }}
                 onMouseLeave={(e) => {
                     e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 3px 12px rgba(0,0,0,0.08)';
+                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.15)';
                 }}
             >
-                {/* Titre en haut */}
+                {/* Nom du pays en haut avec étoile */}
                 <div style={{
                     position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    padding: '12px 16px',
-                    zIndex: 2
+                    top: '20px',
+                    left: '20px',
+                    zIndex: 10,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
                 }}>
+                    <span style={{
+                        color: '#F3CB23',
+                        fontSize: '16px'
+                    }}>✦</span>
                     <h3 style={{
-                        fontSize: '22px',
-                        fontWeight: '300',
-                        margin: 0,
+                        fontSize: '18px',
+                        fontWeight: '400',
                         color: 'white',
-                        fontFamily: 'Georgia, serif',
-                        textShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                        margin: 0,
+                        lineHeight: '1.2',
+                        fontFamily: 'serif',
+                        textShadow: '0 2px 4px rgba(0,0,0,0.3)'
                     }}>
                         {country.name}
                     </h3>
                 </div>
 
-                {/* Image dans la partie inférieure */}
+                {/* Image principale */}
                 <div style={{
                     position: 'absolute',
-                    bottom: '14px',
-                    left: '14px',
-                    right: '14px',
-                    height: '110px',
-                    borderRadius: '10px',
+                    top: '55px',
+                    left: '20px',
+                    right: '20px',
+                    bottom: '20px',
+                    borderRadius: '16px',
                     overflow: 'hidden',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.12)'
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
                 }}>
                     <img
                         src={getCountryImage()}
@@ -230,27 +245,20 @@ const Dashboard = () => {
                             e.target.src = country.flag_url;
                         }}
                     />
-
-                    {/* Overlay subtil */}
-                    <div style={{
-                        position: 'absolute',
-                        inset: 0,
-                        background: 'linear-gradient(to top, rgba(0,0,0,0.08), transparent)'
-                    }} />
                 </div>
 
-                {/* Badge petit drapeau */}
+                {/* Badge drapeau */}
                 <div style={{
                     position: 'absolute',
-                    bottom: '20px',
-                    right: '20px',
-                    width: '22px',
-                    height: '16px',
-                    borderRadius: '2px',
+                    top: '70px',
+                    right: '35px',
+                    width: '28px',
+                    height: '20px',
+                    borderRadius: '6px',
                     overflow: 'hidden',
-                    border: '1.5px solid white',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
-                    zIndex: 3
+                    border: '2px solid white',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                    zIndex: 10
                 }}>
                     <img
                         src={country.flag_url}
@@ -262,11 +270,30 @@ const Dashboard = () => {
                         }}
                     />
                 </div>
+
+                {/* Badge de contenu */}
+                {country.content_count > 0 && (
+                    <div style={{
+                        position: 'absolute',
+                        bottom: '35px',
+                        right: '35px',
+                        backgroundColor: '#F3CB23',
+                        color: '#374640',
+                        borderRadius: '12px',
+                        padding: '4px 8px',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                        zIndex: 10
+                    }}>
+                        {country.content_count}
+                    </div>
+                )}
             </div>
         );
     };
 
-    // Fonction pour rendre les boutons d'action avec badge
+    // Fonction pour les boutons d'action
     const renderActionButton = (action, index) => (
         <button
             key={index}
@@ -291,7 +318,6 @@ const Dashboard = () => {
                 e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
             }}
         >
-            {/* Badge pour notifications non lues */}
             {action.badge && (
                 <div style={{
                     position: 'absolute',
@@ -343,18 +369,28 @@ const Dashboard = () => {
         </button>
     );
 
-    // Si l'utilisateur n'est pas chargé, afficher un chargement
     if (!user) {
         return <div>Chargement...</div>;
     }
 
+    // Déterminer les actions selon le rôle
+    const getActionsForRole = () => {
+        if (isAdmin) return adminActions;
+        if (isModerator) return moderatorActions;
+        return travelerActions;
+    };
+
+    const actions = getActionsForRole();
+
     return (
         <>
+            {/* Navbar */}
             <div className="dashboard-navbar">
                 <img
                     src="/image/SunLogo.svg"
                     alt='Solar Atlas Logo'
-                    className="logo" />
+                    className="logo"
+                />
                 <div style={{ display: 'flex', gap: '20px' }}>
                     <button
                         onClick={handleLogout}
@@ -366,18 +402,20 @@ const Dashboard = () => {
                             cursor: 'pointer'
                         }}
                     >
-                        LOGOUT
+                        DECONNEXION
                     </button>
                 </div>
             </div>
 
+            {/* Header avec titre de bienvenue */}
             <section className="dashboard-header">
                 <div className="header-rounded">
                     <div className="dashboard-background">
                         <img
                             src="/image/DashboardBack.svg"
                             alt='Mountain landscape'
-                            className="dashboard-img" />
+                            className="dashboard-img"
+                        />
                     </div>
                     <div className="text-welcome">
                         <h1 style={{ fontStyle: 'Italic', fontSize: '58px', marginBottom: '20px', color: '#F3CB23' }}>
@@ -390,118 +428,281 @@ const Dashboard = () => {
                 </div>
             </section>
 
-            {/* Afficher un contenu différent selon le rôle */}
+            {/* Contenu principal */}
             <div className="content">
-                {isAdmin ? (
-                    // Contenu admin
-                    <div className="featured-container" style={{ backgroundColor: 'white', padding: '30px' }}>
-                        <div className="title-section" style={{ textAlign: 'center', marginBottom: '40px' }}>
-                            <h2 className="main-title">PANNEAU D'ADMINISTRATION</h2>
-                            <div className="title-divider" style={{ width: '60px', margin: '20px auto' }}></div>
-                        </div>
+                <div className="featured-container" style={{ backgroundColor: 'white', padding: '30px' }}>
 
-                        {/* Stats Admin */}
-                        <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '50px' }}>
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
-                                    {countriesData?.countries?.length || 0}
-                                </div>
-                                <div>Pays créés</div>
-                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                                    Pays disponibles
-                                </div>
+                    <div className="title-section" style={{ textAlign: 'center', marginBottom: '40px' }}>
+                        <h2 className="main-title">
+                            {isAdmin ? 'PANNEAU D\'ADMINISTRATION' :
+                                isModerator ? 'TABLEAU DE BORD MODÉRATEUR' :
+                                    'TABLEAU DE BORD'}
+                        </h2>
+                        <div className="title-divider" style={{ width: '60px', margin: '20px auto' }}></div>
+                    </div>
+
+                    {/* Statistiques améliorées */}
+                    <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '50px' }}>
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
+                                {countriesData?.countries?.length || 0}
                             </div>
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
-                                    {countriesData?.countries?.reduce((total, country) =>
-                                        total + (country.content_count || 0), 0) || 0}
-                                </div>
-                                <div>Contenus publiés</div>
-                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                                    Sections de contenu
-                                </div>
-                            </div>
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
-                                    {unreadCount}
-                                </div>
-                                <div>Notifications</div>
-                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                                    Messages non lus
-                                </div>
+                            <div>Pays {isAdmin ? 'créés' : 'disponibles'}</div>
+                            <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                                {isAdmin ? 'Pays disponibles' : 'À découvrir'}
                             </div>
                         </div>
-
-                        {/* Actions Admin */}
-                        <div className="title-section" style={{ marginBottom: '30px' }}>
-                            <h2 className="main-title">ACTIONS ADMINISTRATEUR</h2>
-                            <div className="title-divider"></div>
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
+                                {isAdmin ?
+                                    (analyticsData?.general?.total_content_sections ||
+                                        countriesData?.countries?.reduce((total, country) =>
+                                            total + (country.content_count || 0), 0) || 0) :
+                                    unreadCount
+                                }
+                            </div>
+                            <div>{isAdmin ? 'Contenus publiés' : 'Notifications'}</div>
+                            <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                                {isAdmin ? 'Sections de contenu' : 'Messages non lus'}
+                            </div>
                         </div>
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
+                                {isAdmin ?
+                                    unreadCount :
+                                    isModerator ?
+                                        (userStats.discussions_created || 0) :
+                                        (userStats.topics_created || 0)
+                                }
+                            </div>
+                            <div>
+                                {isAdmin ?
+                                    'Notifications' :
+                                    isModerator ?
+                                        'Discussions créées' :
+                                        'Topics créés'
+                                }
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                                {isAdmin ?
+                                    'Messages non lus' :
+                                    isModerator ?
+                                        'Total discussions' :
+                                        'Mes contributions'
+                                }
+                            </div>
+                        </div>
+                    </div>
 
+                    {/* Actions selon le rôle */}
+                    <div className="title-section" style={{ marginBottom: '30px' }}>
+                        <h2 className="main-title">
+                            {isAdmin ? 'ACTIONS ADMINISTRATEUR' :
+                                isModerator ? 'MES ACTIONS MODÉRATEUR' :
+                                    'MES ACTIONS'}
+                        </h2>
+                        <div className="title-divider"></div>
+                    </div>
+
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                        gap: '16px',
+                        marginBottom: '50px'
+                    }}>
+                        {actions.map((action, index) => renderActionButton(action, index))}
+                    </div>
+
+                    {/* Section Pays */}
+                    <div className="title-section">
+                        <h2 className="main-title">
+                            {isAdmin ? 'PAYS DISPONIBLES' :
+                                isModerator ? 'PAYS À MODÉRER' :
+                                    'PAYS À DÉCOUVRIR'}
+                        </h2>
+                        <div className="title-divider"></div>
+                    </div>
+
+                    {/* Section recherche rapide juste avant les pays */}
+                    <div style={{
+                        backgroundColor: '#f8f9fa',
+                        borderRadius: '12px',
+                        padding: '20px',
+                        marginBottom: '30px',
+                        border: '1px solid #e9ecef'
+                    }}>
                         <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                            gap: '16px',
-                            marginBottom: '50px'
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '20px',
+                            flexWrap: 'wrap'
                         }}>
-                            {adminActions.map((action, index) => renderActionButton(action, index))}
-                        </div>
-
-                        {/* Section Pays */}
-                        <div className="title-section">
-                            <h2 className="main-title">PAYS DISPONIBLES</h2>
-                            <div className="title-divider"></div>
-                        </div>
-
-                        {countriesLoading ? (
-                            <div style={{
-                                textAlign: 'center',
-                                padding: '40px',
-                                color: '#666'
-                            }}>
-                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-                                <p>Chargement des pays...</p>
-                            </div>
-                        ) : countriesError ? (
-                            <div style={{
-                                textAlign: 'center',
-                                padding: '40px',
-                                color: '#666',
-                                backgroundColor: '#fee2e2',
-                                borderRadius: '8px',
-                                border: '2px dashed #ef4444'
-                            }}>
-                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
-                                <p style={{ color: '#ef4444' }}>
-                                    Erreur lors du chargement des pays
+                            <div style={{ flex: 1, minWidth: '300px' }}>
+                                <h3 style={{
+                                    margin: '0 0 8px 0',
+                                    color: '#374640',
+                                    fontSize: '18px',
+                                    fontWeight: '600'
+                                }}>
+                                    🔍 Recherche rapide
+                                </h3>
+                                <p style={{
+                                    margin: '0 0 12px 0',
+                                    color: '#6b7280',
+                                    fontSize: '14px'
+                                }}>
+                                    Trouvez rapidement un pays ou explorez toutes nos destinations
                                 </p>
+                                <SearchComponent
+                                    placeholder="Rechercher un pays..."
+                                    variant="compact"
+                                    maxResults={8}
+                                />
                             </div>
-                        ) : countriesData?.countries?.length > 0 ? (
+                            <div style={{
+                                display: 'flex',
+                                gap: '12px',
+                                flexWrap: 'wrap'
+                            }}>
+                                <button
+                                    onClick={() => navigate('/countries')}
+                                    style={{
+                                        padding: '10px 16px',
+                                        backgroundColor: '#374640',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.target.style.backgroundColor = '#2d3a33';
+                                        e.target.style.transform = 'translateY(-1px)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.target.style.backgroundColor = '#374640';
+                                        e.target.style.transform = 'translateY(0)';
+                                    }}
+                                >
+                                    Voir tous les pays
+                                </button>
+                                {isAdmin && (
+                                    <button
+                                        onClick={() => navigate('/country-form')}
+                                        style={{
+                                            padding: '10px 16px',
+                                            backgroundColor: '#F3CB23',
+                                            color: '#374640',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            fontSize: '14px',
+                                            fontWeight: '500',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.target.style.backgroundColor = '#e6b71a';
+                                            e.target.style.transform = 'translateY(-1px)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.target.style.backgroundColor = '#F3CB23';
+                                            e.target.style.transform = 'translateY(0)';
+                                        }}
+                                    >
+                                        + Créer un pays
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Affichage des pays */}
+                    {countriesLoading ? (
+                        <div style={{
+                            textAlign: 'center',
+                            padding: '40px',
+                            color: '#666'
+                        }}>
+                            <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
+                            <p>Chargement des pays...</p>
+                        </div>
+                    ) : countriesError ? (
+                        <div style={{
+                            textAlign: 'center',
+                            padding: '40px',
+                            color: '#666',
+                            backgroundColor: '#fee2e2',
+                            borderRadius: '8px',
+                            border: '2px dashed #ef4444'
+                        }}>
+                            <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
+                            <p style={{ color: '#ef4444' }}>
+                                Erreur lors du chargement des pays
+                            </p>
+                        </div>
+                    ) : countriesData?.countries?.length > 0 ? (
+                        <>
                             <div style={{
                                 display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                                gap: '16px',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                                gap: '24px',
                                 marginBottom: '40px'
                             }}>
-                                {countriesData.countries.map((country) => (
-                                    <CountryCard key={country.id} country={country} />
-                                ))}
+                                {countriesData.countries
+                                    .slice(0, isModerator ? 4 : isAdmin ? undefined : 6)
+                                    .map((country) => (
+                                        <CountryCard key={country.id} country={country} />
+                                    ))
+                                }
                             </div>
-                        ) : (
-                            <div style={{
-                                textAlign: 'center',
-                                padding: '40px',
-                                color: '#666',
-                                backgroundColor: '#f8f9fa',
-                                borderRadius: '8px',
-                                border: '2px dashed #ddd'
-                            }}>
-                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌍</div>
-                                <p style={{ marginBottom: '20px' }}>
-                                    Aucun pays créé pour le moment
-                                </p>
+
+                            {/* Bouton voir plus pour voyageurs */}
+                            {!isAdmin && !isModerator && countriesData.countries.length > 6 && (
+                                <div style={{ textAlign: 'center', marginTop: '30px' }}>
+                                    <button
+                                        onClick={() => navigate('/countries')}
+                                        style={{
+                                            backgroundColor: 'transparent',
+                                            color: '#2E3830',
+                                            border: '1px dashed #2E3830',
+                                            borderRadius: '25px',
+                                            padding: '12px 24px',
+                                            cursor: 'pointer',
+                                            fontWeight: 'bold',
+                                            transition: 'all 0.3s ease'
+                                        }}
+                                        onMouseOver={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#F3CB23';
+                                            e.currentTarget.style.borderColor = '#F3CB23';
+                                        }}
+                                        onMouseOut={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                            e.currentTarget.style.borderColor = '#2E3830';
+                                        }}
+                                    >
+                                        ✦ Voir tous les pays ({countriesData.countries.length})
+                                    </button>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <div style={{
+                            textAlign: 'center',
+                            padding: '40px',
+                            color: '#666',
+                            backgroundColor: '#f8f9fa',
+                            borderRadius: '8px',
+                            border: '2px dashed #ddd'
+                        }}>
+                            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌍</div>
+                            <p style={{ marginBottom: '20px' }}>
+                                {isAdmin ? 'Aucun pays créé pour le moment' : 'Aucun pays disponible pour le moment'}
+                            </p>
+                            {isAdmin && (
                                 <button
-                                    onClick={() => handleActionClick('/country-form')}
+                                    onClick={() => navigate('/country-form')}
                                     style={{
                                         backgroundColor: '#F3CB23',
                                         color: '#2E3830',
@@ -514,251 +715,137 @@ const Dashboard = () => {
                                 >
                                     ✦ Créer le premier pays
                                 </button>
-                            </div>
-                        )}
-                    </div>
-                ) : isModerator ? (
-                    // Contenu modérateur
-                    <div className="featured-container" style={{ backgroundColor: 'white', padding: '30px' }}>
-                        <div className="title-section" style={{ textAlign: 'center', marginBottom: '40px' }}>
-                            <h2 className="main-title">TABLEAU DE BORD MODÉRATEUR</h2>
-                            <div className="title-divider" style={{ width: '60px', margin: '20px auto' }}></div>
-                        </div>
-
-                        {/* Stats Modérateur */}
-                        <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '50px' }}>
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
-                                    {unreadCount}
-                                </div>
-                                <div>Notifications</div>
-                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                                    Messages non lus
-                                </div>
-                            </div>
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>-</div>
-                                <div>Signalements</div>
-                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                                    À implémenter
-                                </div>
-                            </div>
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
-                                    {countriesData?.countries?.length || 0}
-                                </div>
-                                <div>Pays disponibles</div>
-                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                                    À modérer
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Actions Modérateur */}
-                        <div className="title-section" style={{ marginBottom: '30px' }}>
-                            <h2 className="main-title">MES ACTIONS MODÉRATEUR</h2>
-                            <div className="title-divider"></div>
-                        </div>
-
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                            gap: '16px',
-                            marginBottom: '50px'
-                        }}>
-                            {moderatorActions.map((action, index) => renderActionButton(action, index))}
-                        </div>
-
-                        {/* Section Pays pour Modérateurs */}
-                        <div className="title-section">
-                            <h2 className="main-title">PAYS À MODÉRER</h2>
-                            <div className="title-divider"></div>
-                        </div>
-
-                        {countriesLoading ? (
-                            <div style={{
-                                textAlign: 'center',
-                                padding: '40px',
-                                color: '#666'
-                            }}>
-                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-                                <p>Chargement des pays...</p>
-                            </div>
-                        ) : countriesData?.countries?.length > 0 ? (
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                                gap: '16px',
-                                marginBottom: '40px'
-                            }}>
-                                {countriesData.countries.slice(0, 4).map((country) => (
-                                    <CountryCard key={country.id} country={country} />
-                                ))}
-                            </div>
-                        ) : (
-                            <div style={{
-                                textAlign: 'center',
-                                padding: '40px',
-                                color: '#666',
-                                backgroundColor: '#f8f9fa',
-                                borderRadius: '8px',
-                                border: '2px dashed #ddd'
-                            }}>
-                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌍</div>
-                                <p>Aucun pays disponible pour le moment</p>
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    // Contenu voyageur/user
-                    <div className="featured-container" style={{ backgroundColor: 'white', padding: '30px' }}>
-                        <div className="title-section" style={{ textAlign: 'center', marginBottom: '40px' }}>
-                            <h2 className="main-title">TABLEAU DE BORD</h2>
-                            <div className="title-divider" style={{ width: '60px', margin: '20px auto' }}></div>
-                        </div>
-
-                        {/* Stats Voyageur */}
-                        <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '50px' }}>
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
-                                    {unreadCount}
-                                </div>
-                                <div>Notifications</div>
-                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                                    Messages non lus
-                                </div>
-                            </div>
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>-</div>
-                                <div>Topics</div>
-                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                                    À implémenter
-                                </div>
-                            </div>
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#F3CB23' }}>
-                                    {countriesData?.countries?.length || 0}
-                                </div>
-                                <div>Pays disponibles</div>
-                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                                    À découvrir
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Actions Voyageur */}
-                        <div className="title-section" style={{ marginBottom: '30px' }}>
-                            <h2 className="main-title">MES ACTIONS</h2>
-                            <div className="title-divider"></div>
-                        </div>
-
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                            gap: '16px',
-                            marginBottom: '50px'
-                        }}>
-                            {travelerActions.map((action, index) => renderActionButton(action, index))}
-                        </div>
-
-                        {/* Section Pays pour Voyageurs */}
-                        <div className="title-section">
-                            <h2 className="main-title">PAYS À DÉCOUVRIR</h2>
-                            <div className="title-divider"></div>
-                        </div>
-
-                        {countriesLoading ? (
-                            <div style={{
-                                textAlign: 'center',
-                                padding: '40px',
-                                color: '#666'
-                            }}>
-                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-                                <p>Chargement des pays...</p>
-                            </div>
-                        ) : countriesError ? (
-                            <div style={{
-                                textAlign: 'center',
-                                padding: '40px',
-                                color: '#666',
-                                backgroundColor: '#fee2e2',
-                                borderRadius: '8px',
-                                border: '2px dashed #ef4444'
-                            }}>
-                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
-                                <p style={{ color: '#ef4444' }}>
-                                    Erreur lors du chargement des pays
-                                </p>
-                            </div>
-                        ) : countriesData?.countries?.length > 0 ? (
-                            <>
-                                <div style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                                    gap: '16px',
-                                    marginBottom: '40px'
-                                }}>
-                                    {countriesData.countries.slice(0, 6).map((country) => (
-                                        <CountryCard key={country.id} country={country} />
-                                    ))}
-                                </div>
-
-                                {/* Bouton voir plus */}
-                                {countriesData.countries.length > 6 && (
-                                    <div style={{ textAlign: 'center', marginTop: '30px' }}>
-                                        <button
-                                            onClick={() => handleActionClick('/countries')}
-                                            style={{
-                                                backgroundColor: 'transparent',
-                                                color: '#2E3830',
-                                                border: '1px dashed #2E3830',
-                                                borderRadius: '25px',
-                                                padding: '12px 24px',
-                                                cursor: 'pointer',
-                                                fontWeight: 'bold',
-                                                transition: 'all 0.3s ease'
-                                            }}
-                                            onMouseOver={(e) => {
-                                                e.currentTarget.style.backgroundColor = '#F3CB23';
-                                                e.currentTarget.style.borderColor = '#F3CB23';
-                                            }}
-                                            onMouseOut={(e) => {
-                                                e.currentTarget.style.backgroundColor = 'transparent';
-                                                e.currentTarget.style.borderColor = '#2E3830';
-                                            }}
-                                        >
-                                            ✦ Voir tous les pays ({countriesData.countries.length})
-                                        </button>
-                                    </div>
-                                )}
-                            </>
-                        ) : (
-                            <div style={{
-                                textAlign: 'center',
-                                padding: '40px',
-                                color: '#666',
-                                backgroundColor: '#f8f9fa',
-                                borderRadius: '8px',
-                                border: '2px dashed #ddd'
-                            }}>
-                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌍</div>
-                                <p style={{ marginBottom: '20px' }}>
-                                    Aucun pays disponible pour le moment
-                                </p>
+                            )}
+                            {!isAdmin && (
                                 <p style={{ fontSize: '14px', color: '#999' }}>
                                     Revenez bientôt pour découvrir de nouveaux contenus !
                                 </p>
-                            </div>
-                        )}
-                    </div>
-                )}
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Contact Footer */}
-            <div className="contact-footer">
-                <h2 className="footer-heading">Contact</h2>
-                <div className="footer-mail">Réseaux</div>
+            <div className="contact-footer" style={{
+                backgroundColor: '#374640',
+                color: 'white',
+                padding: '40px',
+                textAlign: 'center'
+            }}>
+
+                {/* Emails sous Contact */}
+                <div style={{
+                    marginBottom: '30px',
+                    fontSize: '14px'
+                }}>
+
+                    <h2 className="footer-heading" style={{
+                        fontSize: '24px',
+                        marginBottom: '15px',
+                        color: 'white'
+                    }}>Contact</h2>
+
+                    <div style={{ marginBottom: '5px' }}>
+                        <a href="mailto:Argentikk@gmail.com" style={{
+                            color: 'white',
+                            textDecoration: 'none'
+                        }}>
+                            Argentikk@gmail.com
+                        </a>
+                    </div>
+                    <div>
+                        <a href="mailto:konateadam265@gmail.com" style={{
+                            color: 'white',
+                            textDecoration: 'none'
+                        }}>
+                            konateadam265@gmail.com
+                        </a>
+                    </div>
+                </div>
+
+                {/* Section Réseaux avec liens en dessous */}
+                <div style={{ marginBottom: '30px' }}>
+                    <h3 style={{
+                        fontSize: '18px',
+                        marginBottom: '15px',
+                        color: 'white'
+                    }}>Réseaux</h3>
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        gap: '15px',
+                        flexWrap: 'wrap'
+                    }}>
+                        <a
+                            href="https://www.instagram.com/akon_47b/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                                color: 'white',
+                                textDecoration: 'none',
+                                padding: '8px 16px',
+                                border: '1px solid #F3CB23',
+                                borderRadius: '20px',
+                                transition: 'all 0.3s ease',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                fontSize: '14px'
+                            }}
+                            onMouseOver={(e) => {
+                                e.target.style.backgroundColor = '#F3CB23';
+                                e.target.style.color = '#374640';
+                            }}
+                            onMouseOut={(e) => {
+                                e.target.style.backgroundColor = 'transparent';
+                                e.target.style.color = 'white';
+                            }}
+                        >
+                            📸 Instagram
+                        </a>
+                        <a
+                            href="https://www.youtube.com/@AdamKonate-tl4fg"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                                color: 'white',
+                                textDecoration: 'none',
+                                padding: '8px 16px',
+                                border: '1px solid #F3CB23',
+                                borderRadius: '20px',
+                                transition: 'all 0.3s ease',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                fontSize: '14px'
+                            }}
+                            onMouseOver={(e) => {
+                                e.target.style.backgroundColor = '#F3CB23';
+                                e.target.style.color = '#374640';
+                            }}
+                            onMouseOut={(e) => {
+                                e.target.style.backgroundColor = 'transparent';
+                                e.target.style.color = 'white';
+                            }}
+                        >
+                            🎥 YouTube
+                        </a>
+                    </div>
+                </div>
+
+                {/* Copyright */}
+                <div style={{
+                    paddingTop: '20px',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+                    fontSize: '14px',
+                    opacity: 0.8,
+                    color: 'white'
+                }}>
+                    © 2025 Atlas - Créé par Adam Konaté
+                </div>
             </div>
+
         </>
     );
 };

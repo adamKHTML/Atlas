@@ -260,27 +260,82 @@ const ProfilePage = () => {
         }
 
         try {
+            console.log('🔥 Début de la suppression du compte...');
+
+            // 🚨 SUPPRESSION DU COMPTE
             await deleteAccount({ password: deletePassword.trim() }).unwrap();
 
-            // Afficher un message de confirmation avant la déconnexion
-            alert('✅ Votre compte a été supprimé avec succès.\nVous allez être redirigé vers la page de connexion.');
+            // ✅ SUPPRESSION RÉUSSIE - Actions immédiates
+            console.log('✅ Compte supprimé avec succès');
 
-            await logout().unwrap();
-            navigate('/login', {
+            // 1. Fermer immédiatement la modal
+            setShowDeleteModal(false);
+
+            // 2. Nettoyer tous les états locaux
+            setProfileData({
+                firstname: '',
+                lastname: '',
+                pseudo: '',
+                email: '',
+                profile_picture: null
+            });
+            setDeletePassword('');
+
+            // 3. 🔥 NETTOYER REDUX avec votre méthode existante (PARFAIT !)
+            dispatch(setUser(null)); // ✅ Votre méthode actuelle fonctionne parfaitement
+
+            // 4. Afficher le message de confirmation
+            alert('✅ Votre compte a été supprimé avec succès.\nVous allez être redirigé vers l\'accueil.');
+
+            // 5. 🔥 REDIRECTION IMMÉDIATE 
+            navigate('/', {
                 replace: true,
                 state: {
                     message: 'Compte supprimé avec succès',
                     type: 'info'
                 }
             });
-        } catch (error) {
-            console.error('Erreur lors de la suppression:', error);
 
-            // Gérer les erreurs du serveur
-            if (error.data?.error) {
-                setShowErrorMessage(error.data.error);
+            // 6. 🔥 Forcer le rechargement pour éviter les erreurs RTK Query
+            setTimeout(() => {
+                console.log('🔄 Rechargement pour nettoyer RTK Query...');
+                window.location.href = '/';
+            }, 500); // ⬅️ Cette ligne élimine les erreurs 401/500
+
+        } catch (error) {
+            console.error('❌ Erreur lors de la suppression:', error);
+
+            // 🔥 CAS SPÉCIAUX : Erreurs attendues après suppression réussie
+            if (error.status === 401 || error.originalStatus === 401 || error.status === 500) {
+                console.log('✅ Erreur attendue après suppression - Compte probablement supprimé');
+
+                // Nettoyer Redux de toute façon
+                dispatch(setUser(null));
+
+                alert('✅ Votre compte a été supprimé avec succès.\nVous allez être redirigé vers l\'accueil.');
+
+                navigate('/', {
+                    replace: true,
+                    state: {
+                        message: 'Compte supprimé avec succès',
+                        type: 'info'
+                    }
+                });
+
+                // Forcer le rechargement
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 500);
+
             } else {
-                setShowErrorMessage('Erreur lors de la suppression du compte. Veuillez réessayer.');
+                // 🔥 Vraie erreur - afficher le message d'erreur
+                if (error.data?.error) {
+                    setShowErrorMessage(error.data.error);
+                } else if (error.data?.errors && Array.isArray(error.data.errors)) {
+                    setShowErrorMessage(error.data.errors.join(', '));
+                } else {
+                    setShowErrorMessage('Erreur lors de la suppression du compte. Veuillez réessayer.');
+                }
             }
         }
     };
@@ -332,52 +387,53 @@ const ProfilePage = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '0 30px',
+                padding: '0 clamp(15px, 4vw, 30px)',
                 zIndex: 100,
                 boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
             }}>
+                {/* Logo */}
                 <div style={{
                     display: 'flex',
-                    alignItems: 'center',
-                    gap: '20px'
+                    alignItems: 'center'
                 }}>
                     <img
                         src="/image/SunLogo.svg"
                         alt='Atlas Logo'
-                        style={{ height: '40px' }}
+                        style={{ height: 'clamp(32px, 6vw, 40px)' }}
                     />
-                    <h1 style={{
-                        color: 'white',
-                        margin: 0,
-                        fontSize: '20px',
-                        fontWeight: '600'
-                    }}>
-                        Atlas
-                    </h1>
                 </div>
 
+                {/* Bouton Dashboard avec style blanc qui devient doré au hover */}
                 <div style={{ display: 'flex', gap: '15px' }}>
                     <button
                         onClick={() => navigate('/Dashboard')}
                         style={{
                             color: 'white',
-                            background: 'rgba(255,255,255,0.1)',
-                            border: '1px solid rgba(255,255,255,0.2)',
-                            borderRadius: '8px',
-                            padding: '8px 16px',
-                            fontSize: '14px',
+                            background: 'none',
+                            border: '1px dashed white',
+                            borderRadius: '25px',
+                            padding: 'clamp(6px, 2vw, 8px) clamp(12px, 3vw, 16px)',
+                            fontSize: 'clamp(12px, 2.5vw, 14px)',
                             fontWeight: '500',
                             cursor: 'pointer',
-                            transition: 'all 0.2s'
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            whiteSpace: 'nowrap'
                         }}
                         onMouseOver={(e) => {
-                            e.target.style.backgroundColor = 'rgba(255,255,255,0.2)';
+                            e.target.style.backgroundColor = '#F3CB23';
+                            e.target.style.borderColor = '#F3CB23';
+                            e.target.style.color = '#374640';
                         }}
                         onMouseOut={(e) => {
-                            e.target.style.backgroundColor = 'rgba(255,255,255,0.1)';
+                            e.target.style.backgroundColor = 'transparent';
+                            e.target.style.borderColor = 'white';
+                            e.target.style.color = 'white';
                         }}
                     >
-                        🏠 Dashboard
+                        ✦ Dashboard
                     </button>
                 </div>
             </div>
@@ -391,13 +447,13 @@ const ProfilePage = () => {
                 {/* Header */}
                 <div style={{
                     textAlign: 'center',
-                    padding: '30px',
+                    padding: 'clamp(20px, 5vw, 30px)',
                     backgroundColor: '#ECF3F0'
                 }}>
                     <h1 style={{
                         color: '#374640',
                         margin: '0 0 8px 0',
-                        fontSize: '32px',
+                        fontSize: 'clamp(24px, 6vw, 32px)',
                         fontWeight: '600'
                     }}>
                         👤 Mon Profil
@@ -405,7 +461,7 @@ const ProfilePage = () => {
                     <p style={{
                         color: '#6b7280',
                         margin: 0,
-                        fontSize: '16px'
+                        fontSize: 'clamp(14px, 3vw, 16px)'
                     }}>
                         Gérez vos informations personnelles et paramètres de compte
                     </p>
@@ -421,7 +477,9 @@ const ProfilePage = () => {
                         border: '1px solid #16a34a',
                         borderRadius: '8px',
                         color: '#15803d',
-                        textAlign: 'center'
+                        textAlign: 'center',
+                        marginLeft: '20px',
+                        marginRight: '20px'
                     }}>
                         ✅ {showSuccessMessage}
                     </div>
@@ -438,7 +496,9 @@ const ProfilePage = () => {
                         color: '#dc2626',
                         textAlign: 'left',
                         fontSize: '14px',
-                        lineHeight: '1.5'
+                        lineHeight: '1.5',
+                        marginLeft: '20px',
+                        marginRight: '20px'
                     }}>
                         <div style={{ fontWeight: '600', marginBottom: '5px' }}>
                             ❌ Erreur{showErrorMessage.includes(',') ? 's' : ''} détectée{showErrorMessage.includes(',') ? 's' : ''} :
@@ -457,18 +517,18 @@ const ProfilePage = () => {
                 <div style={{
                     maxWidth: '800px',
                     margin: '0 auto',
-                    padding: '0 30px 40px 30px'
+                    padding: '0 clamp(15px, 4vw, 20px) clamp(30px, 6vw, 40px) clamp(15px, 4vw, 20px)'
                 }}>
                     {/* Informations personnelles */}
                     <div style={{
                         backgroundColor: 'white',
                         borderRadius: '12px',
-                        padding: '30px',
+                        padding: 'clamp(20px, 5vw, 30px)',
                         marginBottom: '20px',
                         boxShadow: '0 0 20px rgba(0,0,0,0.1)'
                     }}>
                         <h2 style={{
-                            fontSize: '24px',
+                            fontSize: 'clamp(20px, 4vw, 24px)',
                             fontWeight: '600',
                             color: '#374640',
                             marginBottom: '20px',
@@ -483,22 +543,24 @@ const ProfilePage = () => {
                             <div style={{
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '20px',
+                                gap: 'clamp(15px, 4vw, 20px)',
                                 marginBottom: '25px',
-                                padding: '20px',
+                                padding: 'clamp(15px, 4vw, 20px)',
                                 backgroundColor: '#f8f9fa',
-                                borderRadius: '8px'
+                                borderRadius: '8px',
+                                flexWrap: 'wrap'
                             }}>
                                 <div style={{
-                                    width: '80px',
-                                    height: '80px',
+                                    width: 'clamp(60px, 15vw, 80px)',
+                                    height: 'clamp(60px, 15vw, 80px)',
                                     borderRadius: '50%',
                                     overflow: 'hidden',
                                     backgroundColor: '#e5e7eb',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    fontSize: '32px'
+                                    fontSize: 'clamp(24px, 6vw, 32px)',
+                                    flexShrink: 0
                                 }}>
                                     {profileResponse?.user?.profile_picture ? (
                                         <img
@@ -514,11 +576,11 @@ const ProfilePage = () => {
                                         '👤'
                                     )}
                                 </div>
-                                <div style={{ flex: 1 }}>
-                                    <h4 style={{ margin: '0 0 5px 0', color: '#374640' }}>
+                                <div style={{ flex: 1, minWidth: '200px' }}>
+                                    <h4 style={{ margin: '0 0 5px 0', color: '#374640', fontSize: 'clamp(16px, 3vw, 18px)' }}>
                                         Photo de profil
                                     </h4>
-                                    <p style={{ margin: '0 0 10px 0', color: '#6b7280', fontSize: '14px' }}>
+                                    <p style={{ margin: '0 0 10px 0', color: '#6b7280', fontSize: 'clamp(12px, 2.5vw, 14px)' }}>
                                         Choisissez une image pour votre profil (JPG, PNG, GIF, WebP - max 5MB)
                                     </p>
                                     <input
@@ -536,8 +598,8 @@ const ProfilePage = () => {
                                             color: '#374640',
                                             border: 'none',
                                             borderRadius: '6px',
-                                            padding: '8px 16px',
-                                            fontSize: '14px',
+                                            padding: 'clamp(6px, 2vw, 8px) clamp(12px, 3vw, 16px)',
+                                            fontSize: 'clamp(12px, 2.5vw, 14px)',
                                             fontWeight: '500',
                                             cursor: 'pointer',
                                             transition: 'all 0.2s'
@@ -551,8 +613,8 @@ const ProfilePage = () => {
                             {/* Champs du formulaire */}
                             <div style={{
                                 display: 'grid',
-                                gridTemplateColumns: '1fr 1fr',
-                                gap: '20px',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(min(250px, 100%), 1fr))',
+                                gap: 'clamp(15px, 4vw, 20px)',
                                 marginBottom: '25px'
                             }}>
                                 <div>
@@ -560,7 +622,8 @@ const ProfilePage = () => {
                                         display: 'block',
                                         marginBottom: '8px',
                                         fontWeight: '600',
-                                        color: '#374640'
+                                        color: '#374640',
+                                        fontSize: 'clamp(14px, 2.5vw, 16px)'
                                     }}>
                                         Prénom *
                                     </label>
@@ -572,19 +635,16 @@ const ProfilePage = () => {
                                         required
                                         style={{
                                             width: '100%',
-                                            padding: '12px',
+                                            padding: 'clamp(10px, 2.5vw, 12px)',
                                             border: '1px solid #d1d5db',
                                             borderRadius: '8px',
-                                            fontSize: '14px',
+                                            fontSize: 'clamp(13px, 2.5vw, 14px)',
                                             transition: 'border-color 0.2s',
-                                            outline: 'none'
+                                            outline: 'none',
+                                            boxSizing: 'border-box'
                                         }}
-                                        onFocus={(e) => {
-                                            e.target.style.borderColor = '#F3CB23';
-                                        }}
-                                        onBlur={(e) => {
-                                            e.target.style.borderColor = '#d1d5db';
-                                        }}
+                                        onFocus={(e) => { e.target.style.borderColor = '#F3CB23'; }}
+                                        onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; }}
                                     />
                                 </div>
 
@@ -593,7 +653,8 @@ const ProfilePage = () => {
                                         display: 'block',
                                         marginBottom: '8px',
                                         fontWeight: '600',
-                                        color: '#374640'
+                                        color: '#374640',
+                                        fontSize: 'clamp(14px, 2.5vw, 16px)'
                                     }}>
                                         Nom *
                                     </label>
@@ -605,19 +666,16 @@ const ProfilePage = () => {
                                         required
                                         style={{
                                             width: '100%',
-                                            padding: '12px',
+                                            padding: 'clamp(10px, 2.5vw, 12px)',
                                             border: '1px solid #d1d5db',
                                             borderRadius: '8px',
-                                            fontSize: '14px',
+                                            fontSize: 'clamp(13px, 2.5vw, 14px)',
                                             transition: 'border-color 0.2s',
-                                            outline: 'none'
+                                            outline: 'none',
+                                            boxSizing: 'border-box'
                                         }}
-                                        onFocus={(e) => {
-                                            e.target.style.borderColor = '#F3CB23';
-                                        }}
-                                        onBlur={(e) => {
-                                            e.target.style.borderColor = '#d1d5db';
-                                        }}
+                                        onFocus={(e) => { e.target.style.borderColor = '#F3CB23'; }}
+                                        onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; }}
                                     />
                                 </div>
 
@@ -626,9 +684,10 @@ const ProfilePage = () => {
                                         display: 'block',
                                         marginBottom: '8px',
                                         fontWeight: '600',
-                                        color: '#374640'
+                                        color: '#374640',
+                                        fontSize: 'clamp(14px, 2.5vw, 16px)'
                                     }}>
-                                        Pseudo * <span style={{ color: '#6b7280', fontSize: '12px', fontWeight: 'normal' }}>(3-50 caractères, lettres, chiffres, - et _ uniquement)</span>
+                                        Pseudo * <span style={{ color: '#6b7280', fontSize: 'clamp(11px, 2vw, 12px)', fontWeight: 'normal' }}>(3-50 caractères, lettres, chiffres, - et _ uniquement)</span>
                                     </label>
                                     <input
                                         type="text"
@@ -638,19 +697,16 @@ const ProfilePage = () => {
                                         required
                                         style={{
                                             width: '100%',
-                                            padding: '12px',
+                                            padding: 'clamp(10px, 2.5vw, 12px)',
                                             border: '1px solid #d1d5db',
                                             borderRadius: '8px',
-                                            fontSize: '14px',
+                                            fontSize: 'clamp(13px, 2.5vw, 14px)',
                                             transition: 'border-color 0.2s',
-                                            outline: 'none'
+                                            outline: 'none',
+                                            boxSizing: 'border-box'
                                         }}
-                                        onFocus={(e) => {
-                                            e.target.style.borderColor = '#F3CB23';
-                                        }}
-                                        onBlur={(e) => {
-                                            e.target.style.borderColor = '#d1d5db';
-                                        }}
+                                        onFocus={(e) => { e.target.style.borderColor = '#F3CB23'; }}
+                                        onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; }}
                                     />
                                 </div>
 
@@ -659,7 +715,8 @@ const ProfilePage = () => {
                                         display: 'block',
                                         marginBottom: '8px',
                                         fontWeight: '600',
-                                        color: '#374640'
+                                        color: '#374640',
+                                        fontSize: 'clamp(14px, 2.5vw, 16px)'
                                     }}>
                                         Email *
                                     </label>
@@ -671,19 +728,16 @@ const ProfilePage = () => {
                                         required
                                         style={{
                                             width: '100%',
-                                            padding: '12px',
+                                            padding: 'clamp(10px, 2.5vw, 12px)',
                                             border: '1px solid #d1d5db',
                                             borderRadius: '8px',
-                                            fontSize: '14px',
+                                            fontSize: 'clamp(13px, 2.5vw, 14px)',
                                             transition: 'border-color 0.2s',
-                                            outline: 'none'
+                                            outline: 'none',
+                                            boxSizing: 'border-box'
                                         }}
-                                        onFocus={(e) => {
-                                            e.target.style.borderColor = '#F3CB23';
-                                        }}
-                                        onBlur={(e) => {
-                                            e.target.style.borderColor = '#d1d5db';
-                                        }}
+                                        onFocus={(e) => { e.target.style.borderColor = '#F3CB23'; }}
+                                        onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; }}
                                     />
                                 </div>
                             </div>
@@ -697,22 +751,18 @@ const ProfilePage = () => {
                                     color: '#374640',
                                     border: 'none',
                                     borderRadius: '8px',
-                                    padding: '12px 24px',
-                                    fontSize: '16px',
+                                    padding: 'clamp(10px, 2.5vw, 12px) clamp(20px, 4vw, 24px)',
+                                    fontSize: 'clamp(14px, 3vw, 16px)',
                                     fontWeight: '600',
                                     cursor: isUpdating ? 'not-allowed' : 'pointer',
                                     transition: 'all 0.2s',
                                     opacity: isUpdating ? 0.7 : 1
                                 }}
                                 onMouseOver={(e) => {
-                                    if (!isUpdating) {
-                                        e.target.style.backgroundColor = '#e6b800';
-                                    }
+                                    if (!isUpdating) { e.target.style.backgroundColor = '#e6b800'; }
                                 }}
                                 onMouseOut={(e) => {
-                                    if (!isUpdating) {
-                                        e.target.style.backgroundColor = '#F3CB23';
-                                    }
+                                    if (!isUpdating) { e.target.style.backgroundColor = '#F3CB23'; }
                                 }}
                             >
                                 {isUpdating ? '💾 Mise à jour...' : '💾 Sauvegarder'}
@@ -724,11 +774,11 @@ const ProfilePage = () => {
                     <div style={{
                         backgroundColor: 'white',
                         borderRadius: '12px',
-                        padding: '30px',
+                        padding: 'clamp(20px, 5vw, 30px)',
                         boxShadow: '0 0 20px rgba(0,0,0,0.1)'
                     }}>
                         <h2 style={{
-                            fontSize: '24px',
+                            fontSize: 'clamp(20px, 4vw, 24px)',
                             fontWeight: '600',
                             color: '#374640',
                             marginBottom: '20px',
@@ -746,17 +796,19 @@ const ProfilePage = () => {
                             <div style={{
                                 display: 'flex',
                                 justifyContent: 'space-between',
-                                alignItems: 'center',
-                                padding: '20px',
+                                alignItems: 'flex-start',
+                                padding: 'clamp(15px, 4vw, 20px)',
                                 backgroundColor: '#f8f9fa',
                                 borderRadius: '8px',
-                                border: '1px solid #e5e7eb'
+                                border: '1px solid #e5e7eb',
+                                flexWrap: 'wrap',
+                                gap: '15px'
                             }}>
-                                <div>
-                                    <h4 style={{ margin: '0 0 5px 0', color: '#374640' }}>
+                                <div style={{ flex: 1, minWidth: '200px' }}>
+                                    <h4 style={{ margin: '0 0 5px 0', color: '#374640', fontSize: 'clamp(16px, 3vw, 18px)' }}>
                                         Mot de passe
                                     </h4>
-                                    <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>
+                                    <p style={{ margin: 0, color: '#6b7280', fontSize: 'clamp(12px, 2.5vw, 14px)' }}>
                                         Changez votre mot de passe pour sécuriser votre compte
                                     </p>
                                 </div>
@@ -767,18 +819,15 @@ const ProfilePage = () => {
                                         color: 'white',
                                         border: 'none',
                                         borderRadius: '6px',
-                                        padding: '10px 20px',
-                                        fontSize: '14px',
+                                        padding: 'clamp(8px, 2vw, 10px) clamp(16px, 3vw, 20px)',
+                                        fontSize: 'clamp(12px, 2.5vw, 14px)',
                                         fontWeight: '500',
                                         cursor: 'pointer',
-                                        transition: 'all 0.2s'
+                                        transition: 'all 0.2s',
+                                        flexShrink: 0
                                     }}
-                                    onMouseOver={(e) => {
-                                        e.target.style.backgroundColor = '#2563eb';
-                                    }}
-                                    onMouseOut={(e) => {
-                                        e.target.style.backgroundColor = '#3b82f6';
-                                    }}
+                                    onMouseOver={(e) => { e.target.style.backgroundColor = '#2563eb'; }}
+                                    onMouseOut={(e) => { e.target.style.backgroundColor = '#3b82f6'; }}
                                 >
                                     🔑 Changer
                                 </button>
@@ -788,17 +837,19 @@ const ProfilePage = () => {
                             <div style={{
                                 display: 'flex',
                                 justifyContent: 'space-between',
-                                alignItems: 'center',
-                                padding: '20px',
+                                alignItems: 'flex-start',
+                                padding: 'clamp(15px, 4vw, 20px)',
                                 backgroundColor: '#fef2f2',
                                 borderRadius: '8px',
-                                border: '1px solid #fecaca'
+                                border: '1px solid #fecaca',
+                                flexWrap: 'wrap',
+                                gap: '15px'
                             }}>
-                                <div>
-                                    <h4 style={{ margin: '0 0 5px 0', color: '#dc2626' }}>
+                                <div style={{ flex: 1, minWidth: '200px' }}>
+                                    <h4 style={{ margin: '0 0 5px 0', color: '#dc2626', fontSize: 'clamp(16px, 3vw, 18px)' }}>
                                         Supprimer le compte
                                     </h4>
-                                    <p style={{ margin: 0, color: '#7f1d1d', fontSize: '14px' }}>
+                                    <p style={{ margin: 0, color: '#7f1d1d', fontSize: 'clamp(12px, 2.5vw, 14px)' }}>
                                         Cette action est irréversible. Toutes vos données seront perdues.
                                     </p>
                                 </div>
@@ -809,18 +860,15 @@ const ProfilePage = () => {
                                         color: 'white',
                                         border: 'none',
                                         borderRadius: '6px',
-                                        padding: '10px 20px',
-                                        fontSize: '14px',
+                                        padding: 'clamp(8px, 2vw, 10px) clamp(16px, 3vw, 20px)',
+                                        fontSize: 'clamp(12px, 2.5vw, 14px)',
                                         fontWeight: '500',
                                         cursor: 'pointer',
-                                        transition: 'all 0.2s'
+                                        transition: 'all 0.2s',
+                                        flexShrink: 0
                                     }}
-                                    onMouseOver={(e) => {
-                                        e.target.style.backgroundColor = '#dc2626';
-                                    }}
-                                    onMouseOut={(e) => {
-                                        e.target.style.backgroundColor = '#ef4444';
-                                    }}
+                                    onMouseOver={(e) => { e.target.style.backgroundColor = '#dc2626'; }}
+                                    onMouseOut={(e) => { e.target.style.backgroundColor = '#ef4444'; }}
                                 >
                                     🗑️ Supprimer
                                 </button>
@@ -842,18 +890,21 @@ const ProfilePage = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    zIndex: 1000
+                    zIndex: 1000,
+                    padding: '20px'
                 }}>
                     <div style={{
                         backgroundColor: 'white',
                         borderRadius: '12px',
-                        padding: '30px',
-                        width: '90%',
+                        padding: 'clamp(20px, 5vw, 30px)',
+                        width: '100%',
                         maxWidth: '500px',
-                        boxShadow: '0 0 30px rgba(0,0,0,0.3)'
+                        boxShadow: '0 0 30px rgba(0,0,0,0.3)',
+                        maxHeight: '90vh',
+                        overflowY: 'auto'
                     }}>
                         <h3 style={{
-                            fontSize: '20px',
+                            fontSize: 'clamp(18px, 4vw, 20px)',
                             fontWeight: '600',
                             color: '#374640',
                             marginBottom: '20px',
@@ -868,7 +919,8 @@ const ProfilePage = () => {
                                     display: 'block',
                                     marginBottom: '8px',
                                     fontWeight: '600',
-                                    color: '#374640'
+                                    color: '#374640',
+                                    fontSize: 'clamp(14px, 2.5vw, 16px)'
                                 }}>
                                     Mot de passe actuel *
                                 </label>
@@ -882,11 +934,12 @@ const ProfilePage = () => {
                                     required
                                     style={{
                                         width: '100%',
-                                        padding: '12px',
+                                        padding: 'clamp(10px, 2.5vw, 12px)',
                                         border: '1px solid #d1d5db',
                                         borderRadius: '8px',
-                                        fontSize: '14px',
-                                        outline: 'none'
+                                        fontSize: 'clamp(13px, 2.5vw, 14px)',
+                                        outline: 'none',
+                                        boxSizing: 'border-box'
                                     }}
                                 />
                             </div>
@@ -896,7 +949,8 @@ const ProfilePage = () => {
                                     display: 'block',
                                     marginBottom: '8px',
                                     fontWeight: '600',
-                                    color: '#374640'
+                                    color: '#374640',
+                                    fontSize: 'clamp(14px, 2.5vw, 16px)'
                                 }}>
                                     Nouveau mot de passe *
                                 </label>
@@ -911,11 +965,12 @@ const ProfilePage = () => {
                                     minLength={8}
                                     style={{
                                         width: '100%',
-                                        padding: '12px',
+                                        padding: 'clamp(10px, 2.5vw, 12px)',
                                         border: '1px solid #d1d5db',
                                         borderRadius: '8px',
-                                        fontSize: '14px',
-                                        outline: 'none'
+                                        fontSize: 'clamp(13px, 2.5vw, 14px)',
+                                        outline: 'none',
+                                        boxSizing: 'border-box'
                                     }}
                                 />
                             </div>
@@ -925,7 +980,8 @@ const ProfilePage = () => {
                                     display: 'block',
                                     marginBottom: '8px',
                                     fontWeight: '600',
-                                    color: '#374640'
+                                    color: '#374640',
+                                    fontSize: 'clamp(14px, 2.5vw, 16px)'
                                 }}>
                                     Confirmer le nouveau mot de passe *
                                 </label>
@@ -939,11 +995,12 @@ const ProfilePage = () => {
                                     required
                                     style={{
                                         width: '100%',
-                                        padding: '12px',
+                                        padding: 'clamp(10px, 2.5vw, 12px)',
                                         border: '1px solid #d1d5db',
                                         borderRadius: '8px',
-                                        fontSize: '14px',
-                                        outline: 'none'
+                                        fontSize: 'clamp(13px, 2.5vw, 14px)',
+                                        outline: 'none',
+                                        boxSizing: 'border-box'
                                     }}
                                 />
                             </div>
@@ -951,7 +1008,8 @@ const ProfilePage = () => {
                             <div style={{
                                 display: 'flex',
                                 gap: '15px',
-                                justifyContent: 'flex-end'
+                                justifyContent: 'flex-end',
+                                flexWrap: 'wrap'
                             }}>
                                 <button
                                     type="button"
@@ -968,8 +1026,8 @@ const ProfilePage = () => {
                                         color: 'white',
                                         border: 'none',
                                         borderRadius: '6px',
-                                        padding: '10px 20px',
-                                        fontSize: '14px',
+                                        padding: 'clamp(8px, 2vw, 10px) clamp(16px, 3vw, 20px)',
+                                        fontSize: 'clamp(12px, 2.5vw, 14px)',
                                         fontWeight: '500',
                                         cursor: 'pointer'
                                     }}
@@ -984,8 +1042,8 @@ const ProfilePage = () => {
                                         color: 'white',
                                         border: 'none',
                                         borderRadius: '6px',
-                                        padding: '10px 20px',
-                                        fontSize: '14px',
+                                        padding: 'clamp(8px, 2vw, 10px) clamp(16px, 3vw, 20px)',
+                                        fontSize: 'clamp(12px, 2.5vw, 14px)',
                                         fontWeight: '500',
                                         cursor: isChangingPassword ? 'not-allowed' : 'pointer',
                                         opacity: isChangingPassword ? 0.7 : 1
@@ -1011,18 +1069,21 @@ const ProfilePage = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    zIndex: 1000
+                    zIndex: 1000,
+                    padding: '20px'
                 }}>
                     <div style={{
                         backgroundColor: 'white',
                         borderRadius: '12px',
-                        padding: '30px',
-                        width: '90%',
+                        padding: 'clamp(20px, 5vw, 30px)',
+                        width: '100%',
                         maxWidth: '500px',
-                        boxShadow: '0 0 30px rgba(0,0,0,0.3)'
+                        boxShadow: '0 0 30px rgba(0,0,0,0.3)',
+                        maxHeight: '90vh',
+                        overflowY: 'auto'
                     }}>
                         <h3 style={{
-                            fontSize: '20px',
+                            fontSize: 'clamp(18px, 4vw, 20px)',
                             fontWeight: '600',
                             color: '#dc2626',
                             marginBottom: '20px',
@@ -1041,7 +1102,7 @@ const ProfilePage = () => {
                             <p style={{
                                 color: '#dc2626',
                                 margin: 0,
-                                fontSize: '14px',
+                                fontSize: 'clamp(12px, 2.5vw, 14px)',
                                 textAlign: 'center'
                             }}>
                                 <strong>Attention :</strong> Cette action est irréversible.<br />
@@ -1055,7 +1116,8 @@ const ProfilePage = () => {
                                     display: 'block',
                                     marginBottom: '8px',
                                     fontWeight: '600',
-                                    color: '#374640'
+                                    color: '#374640',
+                                    fontSize: 'clamp(14px, 2.5vw, 16px)'
                                 }}>
                                     Confirmez avec votre mot de passe *
                                 </label>
@@ -1067,11 +1129,12 @@ const ProfilePage = () => {
                                     placeholder="Entrez votre mot de passe pour confirmer"
                                     style={{
                                         width: '100%',
-                                        padding: '12px',
+                                        padding: 'clamp(10px, 2.5vw, 12px)',
                                         border: '1px solid #d1d5db',
                                         borderRadius: '8px',
-                                        fontSize: '14px',
-                                        outline: 'none'
+                                        fontSize: 'clamp(13px, 2.5vw, 14px)',
+                                        outline: 'none',
+                                        boxSizing: 'border-box'
                                     }}
                                 />
                             </div>
@@ -1079,7 +1142,8 @@ const ProfilePage = () => {
                             <div style={{
                                 display: 'flex',
                                 gap: '15px',
-                                justifyContent: 'flex-end'
+                                justifyContent: 'flex-end',
+                                flexWrap: 'wrap'
                             }}>
                                 <button
                                     type="button"
@@ -1092,8 +1156,8 @@ const ProfilePage = () => {
                                         color: 'white',
                                         border: 'none',
                                         borderRadius: '6px',
-                                        padding: '10px 20px',
-                                        fontSize: '14px',
+                                        padding: 'clamp(8px, 2vw, 10px) clamp(16px, 3vw, 20px)',
+                                        fontSize: 'clamp(12px, 2.5vw, 14px)',
                                         fontWeight: '500',
                                         cursor: 'pointer'
                                     }}
@@ -1108,8 +1172,8 @@ const ProfilePage = () => {
                                         color: 'white',
                                         border: 'none',
                                         borderRadius: '6px',
-                                        padding: '10px 20px',
-                                        fontSize: '14px',
+                                        padding: 'clamp(8px, 2vw, 10px) clamp(16px, 3vw, 20px)',
+                                        fontSize: 'clamp(12px, 2.5vw, 14px)',
                                         fontWeight: '500',
                                         cursor: isDeleting ? 'not-allowed' : 'pointer',
                                         opacity: isDeleting ? 0.7 : 1

@@ -13,40 +13,28 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
+use Symfony\Component\Security\Core\Exception\InvalidCsrfTokenException;
 use Psr\Log\LoggerInterface;
 
 class UserController extends AbstractController
 {
-    private UserRepository $userRepository;
-    private EntityManagerInterface $entityManager;
-    private TokenManager $tokenManager;
-    private ?MailerService $mailerService;
-    private ?LoggerInterface $logger;
-    private ?UserPasswordHasherInterface $passwordHasher;
-
     public function __construct(
-        UserRepository $userRepository,
-        EntityManagerInterface $entityManager,
-        TokenManager $tokenManager,
-        ?MailerService $mailerService = null,
-        ?LoggerInterface $logger = null,
-        ?UserPasswordHasherInterface $passwordHasher = null
-    ) {
-        $this->userRepository = $userRepository;
-        $this->entityManager = $entityManager;
-        $this->tokenManager = $tokenManager;
-        $this->mailerService = $mailerService;
-        $this->logger = $logger;
-        $this->passwordHasher = $passwordHasher;
-    }
-    
+        private UserRepository $userRepository,
+        private EntityManagerInterface $entityManager,
+        private TokenManager $tokenManager,
+        private CsrfTokenManagerInterface $csrfTokenManager,
+        private ?MailerService $mailerService = null,
+        private ?LoggerInterface $logger = null,
+        private ?UserPasswordHasherInterface $passwordHasher = null
+    ) {}
+
     /**
-     * 📌 Récupération de l'utilisateur connecté
+     * 🔒 Récupération des informations utilisateur sécurisée
      */
     #[Route('/api/me', name: 'api_me', methods: ['GET'])]
-    public function me(): JsonResponse
+    public function me(Request $request): JsonResponse
     {
         $user = $this->getUser();
 
@@ -54,263 +42,306 @@ class UserController extends AbstractController
             return new JsonResponse(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
         }
 
-        return new JsonResponse([
+        $response = new JsonResponse([
             'id' => $user->getId(),
             'email' => $user->getEmail(),
-            'pseudo' => $user->getPseudo(),
-            'firstname' => $user->getFirstname(),
-            'lastname' => $user->getLastname(),
+            // 🔒 Protection XSS : échappement HTML
+            'pseudo' => htmlspecialchars($user->getPseudo(), ENT_QUOTES, 'UTF-8'),
+            'firstname' => htmlspecialchars($user->getFirstname(), ENT_QUOTES, 'UTF-8'),
+            'lastname' => htmlspecialchars($user->getLastname(), ENT_QUOTES, 'UTF-8'),
             'roles' => $user->getRoles(),
             'isVerified' => $user->isVerified(),
             'profilePicture' => $user->getProfilePicture()
         ]);
+
+        $this->addSecurityHeaders($response);
+        
+        return $response;
     }
 
     /**
-     * 📌 Connexion par identifiants avec création de session
+     * 🔒 Connexion sécurisée avec protection CSRF
      */
     #[Route('/api/login', name: 'api_login', methods: ['POST'])]
     public function login(Request $request): JsonResponse
     {
+        // 🔒 Vérification CSRF
         $data = json_decode($request->getContent(), true);
         
-        if (!isset($data['email']) || !isset($data['password'])) {
-            return new JsonResponse(['error' => 'Email et mot de passe requis'], Response::HTTP_BAD_REQUEST);
+        if (isset($data['_token'])) {
+            if (!$this->isCsrfTokenValid('authenticate', $data['_token'])) {
+                if ($this->logger) {
+                    $this->logger->warning('CSRF token invalid on login', [
+                        'ip' => $request->getClientIp(),
+                        'user_agent' => $request->headers->get('User-Agent'),
+                        'timestamp' => date('Y-m-d H:i:s')
+                    ]);
+                }
+                throw new InvalidCsrfTokenException('Token CSRF invalide');
+            }
         }
+
+        $user = $this->getUser();
         
-        // Trouver l'utilisateur par email
-        $user = $this->userRepository->findOneBy(['email' => $data['email']]);
-        
-        if (!$user || !$this->passwordHasher->isPasswordValid($user, $data['password'])) {
-            return new JsonResponse(['error' => 'Identifiants invalides'], Response::HTTP_UNAUTHORIZED);
-        }
-        
-        if (!$user->isVerified()) {
-            return new JsonResponse(['error' => 'Veuillez vérifier votre email avant de vous connecter'], Response::HTTP_FORBIDDEN);
-        }
-        
-        try {
-            // Générer un token d'authentification en base de données (hashé)
-            $this->tokenManager->generateAuthToken($user);
-            
-            // Créer la session utilisateur
-            $this->authenticateUser($user, $request);
-            
+        if ($user instanceof User) {
+            // 🔒 Log de connexion réussie
             if ($this->logger) {
-                $this->logger->info('Connexion réussie', ['user_id' => $user->getId()]);
+                $this->logger->info('Login success', [
+                    'user_id' => $user->getId(),
+                    'ip' => $request->getClientIp(),
+                    'user_agent' => $request->headers->get('User-Agent'),
+                    'timestamp' => date('Y-m-d H:i:s')
+                ]);
             }
             
-            // Retourner toutes les informations dont le frontend a besoin
-            return new JsonResponse([
+            $response = new JsonResponse([
                 'success' => true,
                 'message' => 'Connexion réussie',
                 'user' => [
                     'id' => $user->getId(),
                     'email' => $user->getEmail(),
-                    'pseudo' => $user->getPseudo(),
-                    'firstname' => $user->getFirstname(),
-                    'lastname' => $user->getLastname(), 
+                    // 🔒 Protection XSS
+                    'pseudo' => htmlspecialchars($user->getPseudo(), ENT_QUOTES, 'UTF-8'),
+                    'firstname' => htmlspecialchars($user->getFirstname(), ENT_QUOTES, 'UTF-8'),
+                    'lastname' => htmlspecialchars($user->getLastname(), ENT_QUOTES, 'UTF-8'),
                     'roles' => $user->getRoles(),
                     'isVerified' => $user->isVerified(),
                     'profilePicture' => $user->getProfilePicture()
                 ]
             ]);
-        } catch (\Exception $e) {
-            if ($this->logger) {
-                $this->logger->error('Échec de génération du token d\'authentification', [
-                    'user_id' => $user->getId(),
-                    'error' => $e->getMessage()
-                ]);
-            }
             
-            return new JsonResponse(
-                ['error' => 'Échec de connexion. Veuillez réessayer.'],
-                Response::HTTP_INTERNAL_SERVER_ERROR
-            );
+            $this->addSecurityHeaders($response);
+            
+            return $response;
         }
+        
+        // 🔒 Log des tentatives de connexion échouées
+        if ($this->logger) {
+            $this->logger->warning('Login failed', [
+                'ip' => $request->getClientIp(),
+                'user_agent' => $request->headers->get('User-Agent'),
+                'timestamp' => date('Y-m-d H:i:s')
+            ]);
+        }
+        
+        $response = new JsonResponse(['error' => 'Identifiants invalides'], Response::HTTP_UNAUTHORIZED);
+        $this->addSecurityHeaders($response);
+        
+        return $response;
     }
 
     /**
-     * Méthode privée pour authentifier l'utilisateur via session
-     */
-    private function authenticateUser(User $user, Request $request): void
-    {
-        // Création manuelle de la session utilisateur
-        $token = new UsernamePasswordToken($user, 'main', $user->getRoles());
-        $this->container->get('security.token_storage')->setToken($token);
-        $request->getSession()->set('_security_main', serialize($token));
-    }
-
-    /**
-     * 📌 Déconnexion (invalidation du token)
+     * 🔒 Déconnexion sécurisée avec protection CSRF
      */
     #[Route('/api/logout', name: 'api_logout', methods: ['POST'])]
-    public function logout(): JsonResponse
+    public function logout(Request $request): JsonResponse
     {
-        $user = $this->getUser();
-        
-        if (!$user instanceof User) {
-            return new JsonResponse(['message' => 'Déjà déconnecté']);
-        }
-        
-        // Invalider le token d'authentification
-        $this->tokenManager->invalidateToken($user);
-        
-        return new JsonResponse(['message' => 'Déconnexion réussie']);
-    }
-
-    /**
-     * 📌 Suppression du compte utilisateur
-     */
-    #[Route('/api/delete-user', name: 'api_delete_user', methods: ['DELETE'])]
-    public function deleteUser(Request $request): JsonResponse
-    {
-        $user = $this->getUser();
-        
-        if (!$user) {
-            return new JsonResponse(['error' => 'Utilisateur non authentifié'], Response::HTTP_UNAUTHORIZED);
-        }
-        
+        // 🔒 Vérification CSRF pour logout
         $data = json_decode($request->getContent(), true);
-
-        if (!isset($data['password']) || !$this->passwordHasher->isPasswordValid($user, $data['password'])) {
-            return new JsonResponse(['error' => 'Mot de passe incorrect'], Response::HTTP_UNAUTHORIZED);
-        }
         
-        // Supprimer l'avatar s'il existe
-        if ($user->getProfilePicture()) {
-            $imagePath = $this->getParameter('kernel.project_dir') . '/public' . $user->getProfilePicture();
-            if (file_exists($imagePath)) {
-                unlink($imagePath);
+        if (isset($data['_token'])) {
+            if (!$this->isCsrfTokenValid('logout', $data['_token'])) {
+                if ($this->logger) {
+                    $this->logger->warning('CSRF token invalid on logout', [
+                        'ip' => $request->getClientIp(),
+                        'timestamp' => date('Y-m-d H:i:s')
+                    ]);
+                }
+                throw new InvalidCsrfTokenException('Token CSRF invalide');
             }
         }
 
-        $this->entityManager->remove($user);
-        $this->entityManager->flush();
-
-        return new JsonResponse(['message' => 'User deleted successfully']);
+        $user = $this->getUser();
+        
+        if ($user instanceof User) {
+            if ($this->logger) {
+                $this->logger->info('Logout', [
+                    'user_id' => $user->getId(),
+                    'ip' => $request->getClientIp(),
+                    'timestamp' => date('Y-m-d H:i:s')
+                ]);
+            }
+        }
+        
+        $response = new JsonResponse(['message' => 'Déconnexion réussie']);
+        $this->addSecurityHeaders($response);
+        
+        return $response;
     }
+
+    /**
+     * 🔒 Endpoint pour générer un token CSRF
+     */
+    #[Route('/api/csrf-token', name: 'api_csrf_token', methods: ['GET'])]
+    public function getCsrfToken(Request $request): JsonResponse
+    {
+        $intention = $request->query->get('intention', 'authenticate');
+        
+        // 🔒 Validation de l'intention
+        $allowedIntentions = ['authenticate', 'logout', 'delete_account', 'update_profile'];
+        if (!in_array($intention, $allowedIntentions)) {
+            $intention = 'authenticate';
+        }
+
+        $token = $this->csrfTokenManager->getToken($intention)->getValue();
+        
+        $response = new JsonResponse([
+            'csrf_token' => $token,
+            'intention' => $intention
+        ]);
+        
+        $this->addSecurityHeaders($response);
+        
+        return $response;
+    }
+
+   
     
     /**
-     * 📌 Vérification d'email via API
+     * 🔒 Vérification email sécurisée
      */
     #[Route('/api/verify-email', name: 'api_verify_email', methods: ['GET'])]
     public function verifyEmail(Request $request): JsonResponse
     {
         $token = $request->query->get('token');
         
-        if (!$token) {
-            if ($this->logger) {
-                $this->logger->warning('Tentative de vérification sans token');
-            }
-            return new JsonResponse([
-                'error' => 'Token de vérification manquant'
-            ], Response::HTTP_BAD_REQUEST);
+        // 🔒 Validation token
+        if (empty($token) || !is_string($token) || strlen($token) < 10 || strlen($token) > 255) {
+            $response = new JsonResponse(['error' => 'Token invalide'], Response::HTTP_BAD_REQUEST);
+            $this->addSecurityHeaders($response);
+            return $response;
         }
         
-        if ($this->logger) {
-            $this->logger->debug('Tentative de vérification d\'email', [
-                'token_preview' => substr($token, 0, 8) . '...'
-            ]);
+        // 🔒 Sanitisation token (caractères autorisés uniquement)
+        if (!preg_match('/^[a-zA-Z0-9]+$/', $token)) {
+            $response = new JsonResponse(['error' => 'Format de token invalide'], Response::HTTP_BAD_REQUEST);
+            $this->addSecurityHeaders($response);
+            return $response;
         }
         
         try {
-            // Utiliser TokenManager pour vérifier le token
             $user = $this->tokenManager->verifyEmailToken($token);
             
-            // Si l'utilisateur est déjà vérifié
             if ($user->isVerified()) {
-                if ($this->logger) {
-                    $this->logger->info('Utilisateur déjà vérifié', [
-                        'user_id' => $user->getId()
-                    ]);
-                }
-                
-                return new JsonResponse([
-                    'message' => 'Votre email a déjà été vérifié',
+                $response = new JsonResponse([
+                    'message' => 'Email déjà vérifié',
                     'verified' => true
                 ]);
+                $this->addSecurityHeaders($response);
+                return $response;
             }
             
-            // Mettre à jour l'utilisateur: marquer comme vérifié et mettre à jour le rôle
             $user->setIsVerified(true);
-            $user->setRoles(['ROLE_TRAVELER']); // ROLE_TRAVELER au lieu de ROLE_VOYAGEUR
-            
-            // Invalider le token après utilisation
+            $user->setRoles(['ROLE_TRAVELER']);
             $user->setVerificationToken(null);
             $user->setVerificationTokenExpiresAt(null);
             
             $this->entityManager->flush();
             
             if ($this->logger) {
-                $this->logger->info('Email vérifié avec succès', [
-                    'user_id' => $user->getId()
+                $this->logger->info('Email verified', [
+                    'user_id' => $user->getId(),
+                    'ip' => $request->getClientIp(),
+                    'timestamp' => date('Y-m-d H:i:s')
                 ]);
             }
             
-            return new JsonResponse([
-                'message' => 'Votre email a été vérifié avec succès',
+            $response = new JsonResponse([
+                'message' => 'Email vérifié avec succès',
                 'verified' => true
             ]);
+            $this->addSecurityHeaders($response);
+            
+            return $response;
+            
         } catch (\Exception $e) {
             if ($this->logger) {
-                $this->logger->warning('Échec de vérification d\'email', [
+                $this->logger->warning('Email verify failed', [
                     'error' => $e->getMessage(),
-                    'token_preview' => substr($token, 0, 8) . '...'
+                    'ip' => $request->getClientIp(),
+                    'timestamp' => date('Y-m-d H:i:s')
                 ]);
             }
             
-            return new JsonResponse([
-                'error' => $e->getMessage()
-            ], Response::HTTP_BAD_REQUEST);
+            $response = new JsonResponse(['error' => 'Token invalide ou expiré'], Response::HTTP_BAD_REQUEST);
+            $this->addSecurityHeaders($response);
+            
+            return $response;
         }
     }
     
     /**
-     * 📌 Renvoyer l'email de vérification
+     * 🔒 Renvoyer email vérification sécurisé
      */
     #[Route('/api/resend-verification-email', name: 'api_resend_verification_email', methods: ['POST'])]
-    public function resendVerificationEmail(): JsonResponse
+    public function resendVerificationEmail(Request $request): JsonResponse
     {
         if (!$this->mailerService) {
-            return new JsonResponse(['error' => 'Service de mail non disponible'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            $response = new JsonResponse(['error' => 'Service mail indisponible'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            $this->addSecurityHeaders($response);
+            return $response;
         }
         
-        /** @var User $user */
         $user = $this->getUser();
         
         if (!$user) {
-            return new JsonResponse(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
+            $response = new JsonResponse(['error' => 'Non authentifié'], Response::HTTP_UNAUTHORIZED);
+            $this->addSecurityHeaders($response);
+            return $response;
         }
         
         if ($user->isVerified()) {
-            return new JsonResponse(['error' => 'Votre email est déjà vérifié'], Response::HTTP_BAD_REQUEST);
+            $response = new JsonResponse(['error' => 'Email déjà vérifié'], Response::HTTP_BAD_REQUEST);
+            $this->addSecurityHeaders($response);
+            return $response;
         }
         
-        // Générer un nouveau token avec TokenManager
         try {
-            $plainToken = $this->tokenManager->generateEmailVerificationToken($user);
-            
-            // Envoyer l'email de vérification
-            $this->mailerService->sendVerificationEmail($user, $plainToken);
+            $token = $this->tokenManager->generateEmailVerificationToken($user);
+            $this->mailerService->sendVerificationEmail($user, $token);
             
             if ($this->logger) {
-                $this->logger->info('Email de vérification renvoyé', ['user_id' => $user->getId()]);
-            }
-            
-            return new JsonResponse(['message' => 'Email de vérification renvoyé avec succès']);
-        } catch (\Exception $e) {
-            if ($this->logger) {
-                $this->logger->error('Échec d\'envoi de l\'email de vérification', [
+                $this->logger->info('Verification email resent', [
                     'user_id' => $user->getId(),
-                    'error' => $e->getMessage()
+                    'ip' => $request->getClientIp(),
+                    'timestamp' => date('Y-m-d H:i:s')
                 ]);
             }
             
-            return new JsonResponse(
-                ['error' => 'Impossible d\'envoyer l\'email de vérification. Veuillez réessayer plus tard.'],
-                Response::HTTP_INTERNAL_SERVER_ERROR
-            );
+            $response = new JsonResponse(['message' => 'Email de vérification renvoyé']);
+            $this->addSecurityHeaders($response);
+            
+            return $response;
+        } catch (\Exception $e) {
+            if ($this->logger) {
+                $this->logger->error('Email resend failed', [
+                    'user_id' => $user->getId(),
+                    'error' => $e->getMessage(),
+                    'ip' => $request->getClientIp(),
+                    'timestamp' => date('Y-m-d H:i:s')
+                ]);
+            }
+            
+            $response = new JsonResponse(['error' => 'Erreur envoi email'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            $this->addSecurityHeaders($response);
+            
+            return $response;
         }
+    }
+
+    /**
+     * 🔒 Méthode privée pour ajouter les headers de sécurité
+     */
+    private function addSecurityHeaders(JsonResponse $response): void
+    {
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        $response->headers->set('X-Frame-Options', 'DENY');
+        $response->headers->set('X-XSS-Protection', '1; mode=block');
+        $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
+        $response->headers->set('Content-Security-Policy', "default-src 'self'");
+        // 🔒 Désactiver la mise en cache des réponses sensibles
+        $response->headers->set('Cache-Control', 'no-cache, no-store, must-revalidate');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('Expires', '0');
     }
 }

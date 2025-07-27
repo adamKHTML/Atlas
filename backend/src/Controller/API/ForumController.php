@@ -60,6 +60,19 @@ class ForumController extends AbstractController
 
             $total = $totalQuery->getSingleScalarResult();
 
+            // Calculate stats with safe user handling
+            $statsQuery = $this->entityManager->createQuery('
+                SELECT 
+                    COUNT(DISTINCT d.id) as total_discussions,
+                    COUNT(DISTINCT m.id) as total_messages,
+                    COUNT(DISTINCT m.user) as active_users
+                FROM App\Entity\Discussion d
+                LEFT JOIN App\Entity\Message m WITH m.discussion = d
+                WHERE d.country = :country
+            ')->setParameter('country', $country);
+
+            $statsResult = $statsQuery->getSingleResult();
+
             $discussionsData = [];
 
             foreach ($discussions as $discussion) {
@@ -79,21 +92,32 @@ class ForumController extends AbstractController
 
                 $latestMessage = !empty($latestMessages) ? $latestMessages[0] : null;
 
+                // Gestion sécurisée de l'utilisateur
+                $latestMessageData = null;
+                if ($latestMessage) {
+                    $messageUser = $latestMessage->getUser();
+                    $latestMessageData = [
+                        'id' => $latestMessage->getId(),
+                        'content' => substr($latestMessage->getContent(), 0, 100) . (strlen($latestMessage->getContent()) > 100 ? '...' : ''),
+                        'created_at' => $latestMessage->getCreatedAt()->format('Y-m-d H:i:s'),
+                        'user' => $messageUser ? [
+                            'id' => $messageUser->getId(),
+                            'pseudo' => $messageUser->getPseudo(),
+                            'profile_picture' => $messageUser->getProfilePicture()
+                        ] : [
+                            'id' => 0,
+                            'pseudo' => 'Utilisateur supprimé',
+                            'profile_picture' => null
+                        ]
+                    ];
+                }
+
                 $discussionsData[] = [
                     'id' => $discussion->getId(),
                     'title' => $discussion->getTitle(),
                     'created_at' => $discussion->getCreatedAt()->format('Y-m-d H:i:s'),
                     'message_count' => (int) $messageCount,
-                    'latest_message' => $latestMessage ? [
-                        'id' => $latestMessage->getId(),
-                        'content' => substr($latestMessage->getContent(), 0, 100) . (strlen($latestMessage->getContent()) > 100 ? '...' : ''),
-                        'created_at' => $latestMessage->getCreatedAt()->format('Y-m-d H:i:s'),
-                        'user' => [
-                            'id' => $latestMessage->getUser()->getId(),
-                            'pseudo' => $latestMessage->getUser()->getPseudo(),
-                            'profile_picture' => $latestMessage->getUser()->getProfilePicture()
-                        ]
-                    ] : null
+                    'latest_message' => $latestMessageData
                 ];
             }
 
@@ -105,9 +129,15 @@ class ForumController extends AbstractController
                     'total_items' => (int) $total,
                     'per_page' => (int) $limit
                 ],
+                'stats' => [
+                    'total_discussions' => (int) $statsResult['total_discussions'],
+                    'total_messages' => (int) $statsResult['total_messages'],
+                    'active_users' => (int) $statsResult['active_users']
+                ],
                 'country' => [
                     'id' => $country->getId(),
-                    'name' => $country->getName()
+                    'name' => $country->getName(),
+                    'flag_url' => $country->getFlagUrl()
                 ]
             ]);
 
@@ -259,7 +289,31 @@ class ForumController extends AbstractController
                     $userReactionQuery = $this->entityManager->getRepository(Reaction::class)
                         ->findOneBy(['message' => $message, 'user' => $currentUser]);
                     
-                    $userReaction = $userReactionQuery ? $userReactionQuery->getType() : null;
+                    $userReaction = $userReactionQuery ? $userReactionQuery->isType() : null;
+                }
+
+                // ✅ CORRECTION: Gestion sécurisée de l'utilisateur avec vérification NULL + ajout des rôles
+                $messageUser = $message->getUser();
+                $userData = null;
+                
+                if ($messageUser) {
+                    $userData = [
+                        'id' => $messageUser->getId(),
+                        'pseudo' => $messageUser->getPseudo(),
+                        'profile_picture' => $messageUser->getProfilePicture(),
+                        'firstname' => $messageUser->getFirstname(),
+                        'lastname' => $messageUser->getLastname(),
+                        'roles' => $messageUser->getRoles() // ✅ AJOUT: Inclure les rôles
+                    ];
+                } else {
+                    $userData = [
+                        'id' => 0,
+                        'pseudo' => 'Utilisateur supprimé',
+                        'profile_picture' => null,
+                        'firstname' => '',
+                        'lastname' => '',
+                        'roles' => ['ROLE_USER']
+                    ];
                 }
 
                 $messagesData[] = [
@@ -267,11 +321,7 @@ class ForumController extends AbstractController
                     'content' => $message->getContent(),
                     'created_at' => $message->getCreatedAt()->format('Y-m-d H:i:s'),
                     'updated_at' => $message->getUpdatedAt()->format('Y-m-d H:i:s'),
-                    'user' => [
-                        'id' => $message->getUser()->getId(),
-                        'pseudo' => $message->getUser()->getPseudo(),
-                        'profile_picture' => $message->getUser()->getProfilePicture()
-                    ],
+                    'user' => $userData,
                     'reactions' => [
                         'likes' => (int) $likes,
                         'dislikes' => (int) $dislikes,
@@ -301,6 +351,7 @@ class ForumController extends AbstractController
 
         } catch (\Exception $e) {
             error_log('Get Discussion Error: ' . $e->getMessage());
+            error_log('Stack trace: ' . $e->getTraceAsString());
             
             return new JsonResponse([
                 'error' => 'Internal server error',
@@ -351,7 +402,10 @@ class ForumController extends AbstractController
                 'user' => [
                     'id' => $message->getUser()->getId(),
                     'pseudo' => $message->getUser()->getPseudo(),
-                    'profile_picture' => $message->getUser()->getProfilePicture()
+                    'profile_picture' => $message->getUser()->getProfilePicture(),
+                    'firstname' => $message->getUser()->getFirstname(),
+                    'lastname' => $message->getUser()->getLastname(),
+                    'roles' => $message->getUser()->getRoles()
                 ],
                 'reactions' => [
                     'likes' => 0,
@@ -378,8 +432,10 @@ class ForumController extends AbstractController
     public function reactToMessage(int $id, Request $request): JsonResponse
     {
         try {
+            // ✅ CORRECTION: Vérification robuste de l'existence du message
             $message = $this->entityManager->getRepository(Message::class)->find($id);
             if (!$message) {
+                error_log("Message with ID {$id} not found");
                 return new JsonResponse(['error' => 'Message not found'], 404);
             }
 
@@ -394,19 +450,25 @@ class ForumController extends AbstractController
                 return new JsonResponse(['error' => 'User not authenticated'], 401);
             }
 
-            // Check if user already reacted
+            error_log("ReactToMessage: User {$user->getId()} wants to " . ($data['type'] ? 'like' : 'dislike') . " message {$id}");
+
+            // ✅ CORRECTION: Gestion améliorée des réactions
             $existingReaction = $this->entityManager->getRepository(Reaction::class)
                 ->findOneBy(['message' => $message, 'user' => $user]);
 
+            $userReaction = null;
+
             if ($existingReaction) {
-                if ($existingReaction->getType() === $data['type']) {
+                if ($existingReaction->isType() === $data['type']) {
                     // Same reaction - remove it
                     $this->entityManager->remove($existingReaction);
                     $userReaction = null;
+                    error_log("Removed existing reaction for user {$user->getId()} on message {$id}");
                 } else {
                     // Different reaction - update it
                     $existingReaction->setType($data['type']);
                     $userReaction = $data['type'];
+                    error_log("Updated reaction for user {$user->getId()} on message {$id} to " . ($data['type'] ? 'like' : 'dislike'));
                 }
             } else {
                 // Create new reaction
@@ -416,9 +478,20 @@ class ForumController extends AbstractController
                 $reaction->setType($data['type']);
                 $this->entityManager->persist($reaction);
                 $userReaction = $data['type'];
+                error_log("Created new reaction for user {$user->getId()} on message {$id}: " . ($data['type'] ? 'like' : 'dislike'));
             }
 
-            $this->entityManager->flush();
+            // ✅ CORRECTION: Transaction sécurisée avec gestion d'erreur
+            try {
+                $this->entityManager->flush();
+                error_log("Reaction successfully saved to database");
+            } catch (\Exception $flushError) {
+                error_log("Database flush error: " . $flushError->getMessage());
+                return new JsonResponse([
+                    'error' => 'Database error during reaction save',
+                    'message' => $flushError->getMessage()
+                ], 500);
+            }
 
             // Return updated counts
             $likesQuery = $this->entityManager->getRepository(Reaction::class)
@@ -441,18 +514,27 @@ class ForumController extends AbstractController
 
             $dislikes = $dislikesQuery->getSingleScalarResult();
 
+            error_log("Final reaction counts for message {$id}: likes={$likes}, dislikes={$dislikes}");
+
             return new JsonResponse([
                 'likes' => (int) $likes,
                 'dislikes' => (int) $dislikes,
-                'user_reaction' => $userReaction
+                'user_reaction' => $userReaction,
+                'message' => 'Reaction updated successfully'
             ]);
 
         } catch (\Exception $e) {
             error_log('React to Message Error: ' . $e->getMessage());
+            error_log('Stack trace: ' . $e->getTraceAsString());
             
             return new JsonResponse([
                 'error' => 'Internal server error',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
+                'debug' => [
+                    'message_id' => $id,
+                    'user_id' => $this->getUser() ? $this->getUser()->getId() : null,
+                    'request_data' => $data ?? null
+                ]
             ], 500);
         }
     }
@@ -483,7 +565,33 @@ class ForumController extends AbstractController
                 $this->entityManager->flush();
             }
 
-            return new JsonResponse(['message' => 'Reaction removed']);
+            // Return updated counts
+            $likesQuery = $this->entityManager->getRepository(Reaction::class)
+                ->createQueryBuilder('r')
+                ->select('COUNT(r.id)')
+                ->where('r.message = :message AND r.type = :type')
+                ->setParameter('message', $message)
+                ->setParameter('type', true)
+                ->getQuery();
+
+            $likes = $likesQuery->getSingleScalarResult();
+
+            $dislikesQuery = $this->entityManager->getRepository(Reaction::class)
+                ->createQueryBuilder('r')
+                ->select('COUNT(r.id)')
+                ->where('r.message = :message AND r.type = :type')
+                ->setParameter('message', $message)
+                ->setParameter('type', false)
+                ->getQuery();
+
+            $dislikes = $dislikesQuery->getSingleScalarResult();
+
+            return new JsonResponse([
+                'message' => 'Reaction removed',
+                'likes' => (int) $likes,
+                'dislikes' => (int) $dislikes,
+                'user_reaction' => null
+            ]);
 
         } catch (\Exception $e) {
             error_log('Unreact to Message Error: ' . $e->getMessage());

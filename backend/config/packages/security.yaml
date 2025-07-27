@@ -19,6 +19,13 @@ security:
                 check_path: api_login
                 username_path: email
                 password_path: password
+            remember_me:
+                secret: '%env(APP_SECRET)%'
+                lifetime: 2592000 # 30 jours
+                path: '/'
+                name: 'remember_me'
+                httponly: true
+                samesite: 'strict'
             logout:
                 path: app_logout
 

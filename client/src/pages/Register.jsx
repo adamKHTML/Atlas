@@ -6,7 +6,13 @@ const Register = () => {
     return (
         <div className="register-page">
             <header className="page-header">
-                <Link to="/" className="logo-link">ATLAS</Link>
+                <Link to="/" className="logo-nav">
+                    <img
+                        src="/image/SunLogo.svg"
+                        alt='Solar Atlas Logo'
+                        className="logo"
+                    />
+                </Link>
                 <Link to="/login" className="nav-button">Se connecter</Link>
             </header>
 

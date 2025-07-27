@@ -3,7 +3,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import './App.css';
-
 import store from './store';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -24,6 +23,7 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import CountriesListPage from './pages/CountriesListPage';
 
 function App() {
+
   return (
     <Provider store={store}>
       <Router>

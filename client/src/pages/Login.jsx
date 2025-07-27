@@ -6,7 +6,13 @@ const Login = () => {
     return (
         <div className="login-page">
             <header className="page-header">
-                <Link to="/" className="logo-link">ATLAS</Link>
+                <Link to="/" className="logo-nav">
+                    <img
+                        src="/image/SunLogo.svg"
+                        alt='Solar Atlas Logo'
+                        className="logo"
+                    />
+                </Link>
                 <Link to="/register" className="nav-button">S'inscrire</Link>
             </header>
 

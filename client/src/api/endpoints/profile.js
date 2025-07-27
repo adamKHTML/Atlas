@@ -23,15 +23,15 @@ export const profileApi = apiSlice.injectEndpoints({
         changePassword: builder.mutation({
             query: (passwordData) => ({
                 url: '/api/profile/password',
-                method: 'PUT',
+                method: 'POST', // ✅ Changé de PUT à POST
                 body: passwordData,
             }),
         }),
 
-        // Supprimer le compte
+        // Supprimer le compte - SEUL ENDPOINT POUR LA SUPPRESSION
         deleteAccount: builder.mutation({
             query: (passwordData) => ({
-                url: '/api/profile',
+                url: '/api/profile', // ✅ URL correcte
                 method: 'DELETE',
                 body: passwordData,
             }),

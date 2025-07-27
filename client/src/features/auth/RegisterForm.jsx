@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useRegisterMutation } from '../../api/endpoints/register';
+import GDPRModal from '../../components/GDPRModal';
 
 export const RegisterForm = () => {
     const [formData, setFormData] = useState({
@@ -17,6 +18,7 @@ export const RegisterForm = () => {
     const [avatarPreview, setAvatarPreview] = useState(null);
     const [agreeTerms, setAgreeTerms] = useState(false);
     const [errors, setErrors] = useState(null);
+    const [isGDPRModalOpen, setIsGDPRModalOpen] = useState(false);
 
     const [register, { isLoading }] = useRegisterMutation();
     const navigate = useNavigate();
@@ -129,159 +131,198 @@ export const RegisterForm = () => {
         }
     };
 
+    const handleGDPRAccept = () => {
+        setAgreeTerms(true);
+        setIsGDPRModalOpen(false);
+    };
+
+    const handleGDPRClose = () => {
+        setIsGDPRModalOpen(false);
+    };
+
+    const openGDPRModal = (e) => {
+        e.preventDefault();
+        setIsGDPRModalOpen(true);
+    };
+
     return (
-        <form onSubmit={handleSubmit} className="register-form">
-            {errors && (
-                <div className="error-box">
-                    <ul>
-                        {errors.map((error, index) => (
-                            <li key={index}>{error}</li>
-                        ))}
-                    </ul>
-                </div>
-            )}
+        <>
+            <form onSubmit={handleSubmit} className="register-form">
+                {errors && (
+                    <div className="error-box">
+                        <ul>
+                            {errors.map((error, index) => (
+                                <li key={index}>{error}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
 
-            <div className="form-group">
-                <label htmlFor="email">Email <span className="required">*</span></label>
-                <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="votre@email.com"
-                />
-            </div>
-
-            <div className="form-group">
-                <label htmlFor="firstname">Prénom <span className="required">*</span></label>
-                <input
-                    id="firstname"
-                    name="firstname"
-                    type="text"
-                    required
-                    value={formData.firstname}
-                    onChange={handleChange}
-                    placeholder="Prénom"
-                />
-            </div>
-
-            <div className="form-group">
-                <label htmlFor="lastname">Nom <span className="required">*</span></label>
-                <input
-                    id="lastname"
-                    name="lastname"
-                    type="text"
-                    required
-                    value={formData.lastname}
-                    onChange={handleChange}
-                    placeholder="Nom"
-                />
-            </div>
-
-            <div className="form-group">
-                <label htmlFor="pseudo">Pseudo <span className="required">*</span></label>
-                <input
-                    id="pseudo"
-                    name="pseudo"
-                    type="text"
-                    required
-                    value={formData.pseudo}
-                    onChange={handleChange}
-                    placeholder="VotreNomVoyageur"
-                />
-                <p className="form-hint">Ce nom sera visible par les autres utilisateurs</p>
-            </div>
-
-            <div className="form-group">
-                <label htmlFor="password">Mot de passe <span className="required">*</span></label>
-                <div className="password-input">
+                <div className="form-group">
+                    <label htmlFor="email">Email <span className="required">*</span></label>
                     <input
-                        id="password"
-                        name="password"
-                        type={showPassword ? "text" : "password"}
+                        id="email"
+                        name="email"
+                        type="email"
                         required
-                        value={formData.password}
+                        value={formData.email}
+                        onChange={handleChange}
+                        placeholder="votre@email.com"
+                    />
+                </div>
+
+                <div className="form-group">
+                    <label htmlFor="firstname">Prénom <span className="required">*</span></label>
+                    <input
+                        id="firstname"
+                        name="firstname"
+                        type="text"
+                        required
+                        value={formData.firstname}
+                        onChange={handleChange}
+                        placeholder="Prénom"
+                    />
+                </div>
+
+                <div className="form-group">
+                    <label htmlFor="lastname">Nom <span className="required">*</span></label>
+                    <input
+                        id="lastname"
+                        name="lastname"
+                        type="text"
+                        required
+                        value={formData.lastname}
+                        onChange={handleChange}
+                        placeholder="Nom"
+                    />
+                </div>
+
+                <div className="form-group">
+                    <label htmlFor="pseudo">Pseudo <span className="required">*</span></label>
+                    <input
+                        id="pseudo"
+                        name="pseudo"
+                        type="text"
+                        required
+                        value={formData.pseudo}
+                        onChange={handleChange}
+                        placeholder="VotreNomVoyageur"
+                    />
+                    <p className="form-hint">Ce nom sera visible par les autres utilisateurs</p>
+                </div>
+
+                <div className="form-group">
+                    <label htmlFor="password">Mot de passe <span className="required">*</span></label>
+                    <div className="password-input">
+                        <input
+                            id="password"
+                            name="password"
+                            type={showPassword ? "text" : "password"}
+                            required
+                            value={formData.password}
+                            onChange={handleChange}
+                            placeholder="••••••••"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="toggle-password"
+                        >
+                            {showPassword ? "Cacher" : "Voir"}
+                        </button>
+                    </div>
+                    <p className="form-hint">Au moins 8 caractères</p>
+                </div>
+
+                <div className="form-group">
+                    <label htmlFor="confirmPassword">Confirmer le mot de passe <span className="required">*</span></label>
+                    <input
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        type="password"
+                        required
+                        value={formData.confirmPassword}
                         onChange={handleChange}
                         placeholder="••••••••"
                     />
-                    <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="toggle-password"
-                    >
-                        {showPassword ? "Cacher" : "Voir"}
-                    </button>
                 </div>
-                <p className="form-hint">Au moins 8 caractères</p>
-            </div>
 
-            <div className="form-group">
-                <label htmlFor="confirmPassword">Confirmer le mot de passe <span className="required">*</span></label>
-                <input
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    type="password"
-                    required
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    placeholder="••••••••"
-                />
-            </div>
-
-            <div className="form-group">
-                <label htmlFor="profile_picture">Photo de profil (optionnelle)</label>
-                <div className="avatar-upload">
-                    <div className="avatar-preview">
-                        {avatarPreview ? (
-                            <img src={avatarPreview} alt="Avatar preview" />
-                        ) : (
-                            <div className="avatar-placeholder">?</div>
-                        )}
-                    </div>
-                    <div className="upload-button">
-                        <label htmlFor="profile_picture_input" className="button-like">
-                            Choisir une image
-                        </label>
-                        <input
-                            id="profile_picture_input"
-                            name="profile_picture"
-                            type="file"
-                            accept="image/jpeg,image/png,image/gif"
-                            onChange={handleFileChange}
-                            className="hidden-input"
-                        />
-                        <p className="form-hint">JPG, PNG ou GIF. 2 Mo maximum.</p>
+                <div className="form-group">
+                    <label htmlFor="profile_picture">Photo de profil (optionnelle)</label>
+                    <div className="avatar-upload">
+                        <div className="avatar-preview">
+                            {avatarPreview ? (
+                                <img src={avatarPreview} alt="Avatar preview" />
+                            ) : (
+                                <div className="avatar-placeholder">?</div>
+                            )}
+                        </div>
+                        <div className="upload-button">
+                            <label htmlFor="profile_picture_input" className="button-like">
+                                Choisir une image
+                            </label>
+                            <input
+                                id="profile_picture_input"
+                                name="profile_picture"
+                                type="file"
+                                accept="image/jpeg,image/png,image/gif"
+                                onChange={handleFileChange}
+                                className="hidden-input"
+                            />
+                            <p className="form-hint">JPG, PNG ou GIF. 2 Mo maximum.</p>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div className="terms-checkbox">
-                <input
-                    id="terms"
-                    name="terms"
-                    type="checkbox"
-                    checked={agreeTerms}
-                    onChange={() => setAgreeTerms(!agreeTerms)}
-                />
-                <label htmlFor="terms">
-                    J'accepte les <Link to="/terms">conditions d'utilisation</Link> et la <Link to="/privacy">politique de confidentialité</Link>
-                </label>
-            </div>
+                <div className="terms-checkbox">
+                    <input
+                        id="terms"
+                        name="terms"
+                        type="checkbox"
+                        checked={agreeTerms}
+                        onChange={() => setAgreeTerms(!agreeTerms)}
+                    />
+                    <label htmlFor="terms">
+                        J'accepte les{' '}
+                        <button
+                            type="button"
+                            onClick={openGDPRModal}
+                            className="terms-link"
+                        >
+                            conditions d'utilisation
+                        </button>
+                        {' '}et la{' '}
+                        <button
+                            type="button"
+                            onClick={openGDPRModal}
+                            className="terms-link"
+                        >
+                            politique de confidentialité
+                        </button>
+                    </label>
+                </div>
 
-            <button
-                type="submit"
-                disabled={isLoading}
-                className="submit-button"
-            >
-                {isLoading ? 'Inscription en cours...' : 'S\'inscrire'}
-            </button>
+                <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="submit-button"
+                >
+                    {isLoading ? 'Inscription en cours...' : 'S\'inscrire'}
+                </button>
 
-            <div className="info-box">
-                <p>Après l'inscription, un email de confirmation vous sera envoyé. Veuillez vérifier votre boîte de réception pour activer votre compte.</p>
-            </div>
-        </form>
+                <div className="info-box">
+                    <p>Après l'inscription, un email de confirmation vous sera envoyé. Veuillez vérifier votre boîte de réception pour activer votre compte.</p>
+                </div>
+            </form>
+
+            <GDPRModal
+                isOpen={isGDPRModalOpen}
+                onClose={handleGDPRClose}
+                onAccept={handleGDPRAccept}
+            />
+
+
+        </>
     );
 };
 
