@@ -1,6 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGetProfileQuery, useUpdateProfileMutation, useChangePasswordMutation, useDeleteAccountMutation } from '../api/endpoints/profile';
+import {
+    useGetProfileQuery,
+    useUpdateProfileInfoMutation,
+    useUpdateProfilePictureMutation,
+    useChangePasswordMutation,
+    useDeleteAccountMutation
+} from '../api/endpoints/profile';
 import { useLogoutMutation } from '../api/endpoints/auth';
 import { useDispatch } from 'react-redux';
 import { setUser } from '../store/slices/authSlice';
@@ -36,7 +42,8 @@ const ProfilePage = () => {
 
     // RTK Query hooks
     const { data: profileResponse, isLoading, error } = useGetProfileQuery();
-    const [updateProfile, { isLoading: isUpdating }] = useUpdateProfileMutation();
+    const [updateProfileInfo, { isLoading: isUpdatingInfo }] = useUpdateProfileInfoMutation();
+    const [updateProfilePicture, { isLoading: isUpdatingPicture }] = useUpdateProfilePictureMutation();
     const [changePassword, { isLoading: isChangingPassword }] = useChangePasswordMutation();
     const [deleteAccount, { isLoading: isDeleting }] = useDeleteAccountMutation();
 
@@ -85,7 +92,8 @@ const ProfilePage = () => {
         }));
     };
 
-    const handleProfileSubmit = async (e) => {
+    // 🔥 NOUVEAU : Gestionnaire pour les infos texte uniquement
+    const handleProfileInfoSubmit = async (e) => {
         e.preventDefault();
 
         // Validation côté client
@@ -115,41 +123,70 @@ const ProfilePage = () => {
             clientErrors.push('Format d\'email invalide');
         }
 
-        // Validation de la photo si présente
-        if (profileData.profile_picture) {
-            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-            const maxSize = 5 * 1024 * 1024; // 5MB
-
-            if (!allowedTypes.includes(profileData.profile_picture.type)) {
-                clientErrors.push('Format d\'image non autorisé. Utilisez JPG, PNG, GIF ou WebP');
-            }
-
-            if (profileData.profile_picture.size > maxSize) {
-                clientErrors.push('La taille de l\'image ne peut pas dépasser 5MB');
-            }
-        }
-
         if (clientErrors.length > 0) {
             setShowErrorMessage(clientErrors.join(', '));
             return;
         }
 
         try {
-            const formData = new FormData();
-            formData.append('firstname', profileData.firstname.trim());
-            formData.append('lastname', profileData.lastname.trim());
-            formData.append('pseudo', profileData.pseudo.trim());
-            formData.append('email', profileData.email.trim());
+            // 🔥 Appel API pour les infos texte uniquement (JSON)
+            const result = await updateProfileInfo({
+                firstname: profileData.firstname.trim(),
+                lastname: profileData.lastname.trim(),
+                pseudo: profileData.pseudo.trim(),
+                email: profileData.email.trim()
+            }).unwrap();
 
-            if (profileData.profile_picture) {
-                formData.append('profile_picture', profileData.profile_picture);
-            }
+            setShowSuccessMessage('Informations mises à jour avec succès');
 
-            const result = await updateProfile(formData).unwrap();
-            setShowSuccessMessage('Profil mis à jour avec succès');
-
-            // Mettre à jour les données Redux si nécessaire
+            // Mettre à jour Redux si nécessaire
             dispatch(setUser(result.user));
+
+        } catch (error) {
+            console.error('Erreur lors de la mise à jour des infos:', error);
+
+            if (error.data?.errors && Array.isArray(error.data.errors)) {
+                setShowErrorMessage(error.data.errors.join(', '));
+            } else if (error.data?.error) {
+                setShowErrorMessage(error.data.error);
+            } else {
+                setShowErrorMessage('Erreur lors de la mise à jour des informations. Veuillez réessayer.');
+            }
+        }
+    };
+
+    // 🔥 NOUVEAU : Gestionnaire pour la photo uniquement
+    const handleProfilePictureSubmit = async (e) => {
+        e.preventDefault();
+
+        console.log('🔥 Soumission de la photo de profil:', profileData.profile_picture);
+        if (!profileData.profile_picture) {
+            setShowErrorMessage('Aucune image sélectionnée');
+            return;
+        }
+
+        // Validation image
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        const maxSize = 5 * 1024 * 1024; // 5MB
+
+        if (!allowedTypes.includes(profileData.profile_picture.type)) {
+            setShowErrorMessage('Format d\'image non autorisé. Utilisez JPG, PNG, GIF ou WebP');
+            return;
+        }
+
+        if (profileData.profile_picture.size > maxSize) {
+            setShowErrorMessage('La taille de l\'image ne peut pas dépasser 5MB');
+            return;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('profile_picture', profileData.profile_picture);
+
+            // 🔥 Appel API pour la photo uniquement (FormData)
+            await updateProfilePicture(formData).unwrap();
+
+            setShowSuccessMessage('Photo de profil mise à jour avec succès');
 
             // Réinitialiser le fichier sélectionné
             setProfileData(prev => ({ ...prev, profile_picture: null }));
@@ -158,15 +195,14 @@ const ProfilePage = () => {
             }
 
         } catch (error) {
-            console.error('Erreur lors de la mise à jour:', error);
+            console.error('Erreur lors de la mise à jour de la photo:', error);
 
-            // Gérer les erreurs du serveur
             if (error.data?.errors && Array.isArray(error.data.errors)) {
                 setShowErrorMessage(error.data.errors.join(', '));
             } else if (error.data?.error) {
                 setShowErrorMessage(error.data.error);
             } else {
-                setShowErrorMessage('Erreur lors de la mise à jour du profil. Veuillez réessayer.');
+                setShowErrorMessage('Erreur lors de la mise à jour de la photo. Veuillez réessayer.');
             }
         }
     };
@@ -223,7 +259,6 @@ const ProfilePage = () => {
         } catch (error) {
             console.error('Erreur lors du changement de mot de passe:', error);
 
-            // Gérer les erreurs du serveur
             if (error.data?.errors && Array.isArray(error.data.errors)) {
                 setShowErrorMessage(error.data.errors.join(', '));
             } else if (error.data?.error) {
@@ -237,13 +272,11 @@ const ProfilePage = () => {
     const handleDeleteAccount = async (e) => {
         e.preventDefault();
 
-        // Validation côté client
         if (!deletePassword.trim()) {
             setShowErrorMessage('Le mot de passe est requis pour confirmer la suppression');
             return;
         }
 
-        // Confirmation supplémentaire
         const confirmDelete = window.confirm(
             '⚠️ ATTENTION ⚠️\n\n' +
             'Vous êtes sur le point de supprimer définitivement votre compte.\n' +
@@ -262,16 +295,11 @@ const ProfilePage = () => {
         try {
             console.log('🔥 Début de la suppression du compte...');
 
-            // 🚨 SUPPRESSION DU COMPTE
             await deleteAccount({ password: deletePassword.trim() }).unwrap();
 
-            // ✅ SUPPRESSION RÉUSSIE - Actions immédiates
             console.log('✅ Compte supprimé avec succès');
 
-            // 1. Fermer immédiatement la modal
             setShowDeleteModal(false);
-
-            // 2. Nettoyer tous les états locaux
             setProfileData({
                 firstname: '',
                 lastname: '',
@@ -281,13 +309,10 @@ const ProfilePage = () => {
             });
             setDeletePassword('');
 
-            // 3. 🔥 NETTOYER REDUX avec votre méthode existante (PARFAIT !)
-            dispatch(setUser(null)); // ✅ Votre méthode actuelle fonctionne parfaitement
+            dispatch(setUser(null));
 
-            // 4. Afficher le message de confirmation
             alert('✅ Votre compte a été supprimé avec succès.\nVous allez être redirigé vers l\'accueil.');
 
-            // 5. 🔥 REDIRECTION IMMÉDIATE 
             navigate('/', {
                 replace: true,
                 state: {
@@ -296,20 +321,17 @@ const ProfilePage = () => {
                 }
             });
 
-            // 6. 🔥 Forcer le rechargement pour éviter les erreurs RTK Query
             setTimeout(() => {
                 console.log('🔄 Rechargement pour nettoyer RTK Query...');
                 window.location.href = '/';
-            }, 500); // ⬅️ Cette ligne élimine les erreurs 401/500
+            }, 500);
 
         } catch (error) {
             console.error('❌ Erreur lors de la suppression:', error);
 
-            // 🔥 CAS SPÉCIAUX : Erreurs attendues après suppression réussie
             if (error.status === 401 || error.originalStatus === 401 || error.status === 500) {
                 console.log('✅ Erreur attendue après suppression - Compte probablement supprimé');
 
-                // Nettoyer Redux de toute façon
                 dispatch(setUser(null));
 
                 alert('✅ Votre compte a été supprimé avec succès.\nVous allez être redirigé vers l\'accueil.');
@@ -322,13 +344,11 @@ const ProfilePage = () => {
                     }
                 });
 
-                // Forcer le rechargement
                 setTimeout(() => {
                     window.location.href = '/';
                 }, 500);
 
             } else {
-                // 🔥 Vraie erreur - afficher le message d'erreur
                 if (error.data?.error) {
                     setShowErrorMessage(error.data.error);
                 } else if (error.data?.errors && Array.isArray(error.data.errors)) {
@@ -391,7 +411,6 @@ const ProfilePage = () => {
                 zIndex: 100,
                 boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
             }}>
-                {/* Logo */}
                 <div style={{
                     display: 'flex',
                     alignItems: 'center'
@@ -403,7 +422,6 @@ const ProfilePage = () => {
                     />
                 </div>
 
-                {/* Bouton Dashboard avec style blanc qui devient doré au hover */}
                 <div style={{ display: 'flex', gap: '15px' }}>
                     <button
                         onClick={() => navigate('/Dashboard')}
@@ -519,7 +537,7 @@ const ProfilePage = () => {
                     margin: '0 auto',
                     padding: '0 clamp(15px, 4vw, 20px) clamp(30px, 6vw, 40px) clamp(15px, 4vw, 20px)'
                 }}>
-                    {/* Informations personnelles */}
+                    {/* 🔥 PREMIER FORMULAIRE : Photo de profil */}
                     <div style={{
                         backgroundColor: 'white',
                         borderRadius: '12px',
@@ -535,11 +553,10 @@ const ProfilePage = () => {
                             borderBottom: '2px solid #F3CB23',
                             paddingBottom: '10px'
                         }}>
-                            📝 Informations personnelles
+                            📷 Photo de profil
                         </h2>
 
-                        <form onSubmit={handleProfileSubmit}>
-                            {/* Photo de profil */}
+                        <form onSubmit={handleProfilePictureSubmit}>
                             <div style={{
                                 display: 'flex',
                                 alignItems: 'center',
@@ -605,12 +622,62 @@ const ProfilePage = () => {
                                             transition: 'all 0.2s'
                                         }}
                                     >
-                                        📷 Changer la photo
+                                        📷 Choisir une photo
                                     </button>
                                 </div>
                             </div>
 
-                            {/* Champs du formulaire */}
+                            <button
+                                type="submit"
+                                disabled={isUpdatingPicture || !profileData.profile_picture}
+                                style={{
+                                    backgroundColor: '#3b82f6',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    padding: 'clamp(10px, 2.5vw, 12px) clamp(20px, 4vw, 24px)',
+                                    fontSize: 'clamp(14px, 3vw, 16px)',
+                                    fontWeight: '600',
+                                    cursor: (isUpdatingPicture || !profileData.profile_picture) ? 'not-allowed' : 'pointer',
+                                    transition: 'all 0.2s',
+                                    opacity: (isUpdatingPicture || !profileData.profile_picture) ? 0.5 : 1
+                                }}
+                                onMouseOver={(e) => {
+                                    if (!isUpdatingPicture && profileData.profile_picture) {
+                                        e.target.style.backgroundColor = '#2563eb';
+                                    }
+                                }}
+                                onMouseOut={(e) => {
+                                    if (!isUpdatingPicture && profileData.profile_picture) {
+                                        e.target.style.backgroundColor = '#3b82f6';
+                                    }
+                                }}
+                            >
+                                {isUpdatingPicture ? '📷 Mise à jour...' : '📷 Changer la photo'}
+                            </button>
+                        </form>
+                    </div>
+
+                    {/* 🔥 DEUXIÈME FORMULAIRE : Informations personnelles */}
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '12px',
+                        padding: 'clamp(20px, 5vw, 30px)',
+                        marginBottom: '20px',
+                        boxShadow: '0 0 20px rgba(0,0,0,0.1)'
+                    }}>
+                        <h2 style={{
+                            fontSize: 'clamp(20px, 4vw, 24px)',
+                            fontWeight: '600',
+                            color: '#374640',
+                            marginBottom: '20px',
+                            borderBottom: '2px solid #F3CB23',
+                            paddingBottom: '10px'
+                        }}>
+                            📝 Informations personnelles
+                        </h2>
+
+                        <form onSubmit={handleProfileInfoSubmit}>
                             <div style={{
                                 display: 'grid',
                                 gridTemplateColumns: 'repeat(auto-fit, minmax(min(250px, 100%), 1fr))',
@@ -742,10 +809,9 @@ const ProfilePage = () => {
                                 </div>
                             </div>
 
-                            {/* Bouton de soumission */}
                             <button
                                 type="submit"
-                                disabled={isUpdating}
+                                disabled={isUpdatingInfo}
                                 style={{
                                     backgroundColor: '#F3CB23',
                                     color: '#374640',
@@ -754,18 +820,18 @@ const ProfilePage = () => {
                                     padding: 'clamp(10px, 2.5vw, 12px) clamp(20px, 4vw, 24px)',
                                     fontSize: 'clamp(14px, 3vw, 16px)',
                                     fontWeight: '600',
-                                    cursor: isUpdating ? 'not-allowed' : 'pointer',
+                                    cursor: isUpdatingInfo ? 'not-allowed' : 'pointer',
                                     transition: 'all 0.2s',
-                                    opacity: isUpdating ? 0.7 : 1
+                                    opacity: isUpdatingInfo ? 0.7 : 1
                                 }}
                                 onMouseOver={(e) => {
-                                    if (!isUpdating) { e.target.style.backgroundColor = '#e6b800'; }
+                                    if (!isUpdatingInfo) { e.target.style.backgroundColor = '#e6b800'; }
                                 }}
                                 onMouseOut={(e) => {
-                                    if (!isUpdating) { e.target.style.backgroundColor = '#F3CB23'; }
+                                    if (!isUpdatingInfo) { e.target.style.backgroundColor = '#F3CB23'; }
                                 }}
                             >
-                                {isUpdating ? '💾 Mise à jour...' : '💾 Sauvegarder'}
+                                {isUpdatingInfo ? '💾 Mise à jour...' : '💾 Sauvegarder les informations'}
                             </button>
                         </form>
                     </div>

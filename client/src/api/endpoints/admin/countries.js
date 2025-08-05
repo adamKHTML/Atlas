@@ -8,41 +8,38 @@ export const adminCountriesApi = apiSlice.injectEndpoints({
         // ==========================================
 
         // ÉTAPE 1 : Création du pays de base (CountryForm)
-        createCountry: builder.mutation({
-            query: (countryData) => {
-                // Préparation du FormData pour l'upload d'image
-                const formData = new FormData();
-                formData.append('name', countryData.name);
-                formData.append('code', countryData.code);
-                formData.append('flag_url', countryData.flag_url);
-                formData.append('description', countryData.description);
 
-                // Ajout de l'image du pays dans le bon dossier (countries)
-                if (countryData.country_image) {
-                    formData.append('country_image', countryData.country_image);
-                }
+        createCountry: builder.mutation({
+            query: (formData) => {
+                console.log('📤 API: Réception des données FormData');
 
                 return {
                     url: '/api/admin/countries',
                     method: 'POST',
-                    body: formData,
-                    // Ne pas définir Content-Type, le browser le fera automatiquement avec boundary
+                    body: formData, // FormData directement
+                    // 🔥 SOLUTION GARANTIE: Override complet des headers
+                    prepareHeaders: (headers) => {
+                        // Supprimer TOUT Content-Type existant
+                        headers.delete('Content-Type');
+                        // Garder seulement X-Requested-With
+                        headers.set('X-Requested-With', 'XMLHttpRequest');
+                        console.log('🔧 Headers après override:', Array.from(headers.entries()));
+                        return headers;
+                    },
                 };
             },
-            // 🎯 INVALIDATION ÉQUILIBRÉE pour création
             invalidatesTags: [
-                'Countries', // Invalide toutes les requêtes génériques
-                { type: 'Countries', id: 'LIST' }, // Invalide les listes
-                { type: 'Countries', id: 'DASHBOARD' }, // Invalide le dashboard
-                { type: 'Countries', id: 'FEATURED' }, // Invalide les pays en vedette
-                'CountriesStats' // Invalide les statistiques
+                'Countries',
+                { type: 'Countries', id: 'LIST' },
+                { type: 'Countries', id: 'DASHBOARD' },
+                { type: 'Countries', id: 'FEATURED' },
+                'CountriesStats'
             ],
             transformResponse: (response) => {
                 console.log('✅ Pays créé avec succès:', response);
                 return response;
             },
         }),
-
         // ÉTAPE 2 : Mise à jour/ajout du contenu (CountryContent)
         updateCountryContent: builder.mutation({
             query: ({ countryId, sections }) => {

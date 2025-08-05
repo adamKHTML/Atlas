@@ -1,3 +1,4 @@
+// src/api/apiSlice.js
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
 const API_URL = "http://localhost:8000";
@@ -7,13 +8,26 @@ export const apiSlice = createApi({
     baseQuery: fetchBaseQuery({
         baseUrl: API_URL,
         credentials: 'include',
-        prepareHeaders: (headers) => {
-
+        // Dans apiSlice.js, modifiez prepareHeaders comme ça :
+        prepareHeaders: (headers, { getState, endpoint, type, extra }) => {
             headers.set('X-Requested-With', 'XMLHttpRequest');
-            headers.set('Content-Type', 'application/json');
+
+            // 🔥 EXCEPTION SPÉCIALE pour createCountry
+            if (endpoint === 'createCountry') {
+                headers.delete('Content-Type'); // Laisser le navigateur gérer
+                console.log('🔧 Content-Type supprimé pour createCountry');
+                return headers;
+            }
+
+            // Pour tous les autres endpoints
+            const isUploadEndpoint = /upload|picture|file|image/i.test(endpoint || '');
+            if (!isUploadEndpoint) {
+                headers.set('Content-Type', 'application/json');
+            }
+
             return headers;
-        },
+        }
     }),
-    tagTypes: ['Register', 'Auth', 'Country', 'Ban', 'Discussion', 'Message', 'Notification', 'User', 'UserManagement'],
+    tagTypes: ['Register', 'Auth', 'Country', 'Ban', 'Discussion', 'Message', 'Notification', 'User', 'UserManagement', 'Profile'],
     endpoints: () => ({}),
 });

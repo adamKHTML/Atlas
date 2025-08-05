@@ -1,39 +1,63 @@
-// src/api/endpoints/profile.js
+// src/api/endpoints/profile.js - VERSION CORRIGÉE
 import { apiSlice } from '../apiSlice';
 
 export const profileApi = apiSlice.injectEndpoints({
     endpoints: (builder) => ({
-        // Récupérer les informations du profil
         getProfile: builder.query({
-            query: () => '/api/profile',
+            query: () => ({
+                url: '/api/profile',
+                credentials: 'include',
+            }),
             providesTags: ['Profile'],
         }),
 
-        // Mettre à jour le profil
-        updateProfile: builder.mutation({
-            query: (formData) => ({
-                url: '/api/profile',
-                method: 'POST', // FormData nécessite POST
-                body: formData,
+        // Mise à jour des infos texte uniquement
+        updateProfileInfo: builder.mutation({
+            query: (profileData) => ({
+                url: '/api/profile/info',
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(profileData),
+                credentials: 'include',
             }),
             invalidatesTags: ['Profile', 'Auth'],
         }),
 
-        // Changer le mot de passe
+        // 🔥 CORRECTION : Mise à jour de la photo uniquement
+        updateProfilePicture: builder.mutation({
+            query: (formData) => ({
+                url: '/api/profile/picture',
+                method: 'POST',
+                body: formData,
+                credentials: 'include',
+
+            }),
+            invalidatesTags: ['Profile', 'Auth'],
+        }),
+
         changePassword: builder.mutation({
             query: (passwordData) => ({
                 url: '/api/profile/password',
-                method: 'POST', // ✅ Changé de PUT à POST
-                body: passwordData,
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(passwordData),
+                credentials: 'include',
             }),
         }),
 
-        // Supprimer le compte - SEUL ENDPOINT POUR LA SUPPRESSION
         deleteAccount: builder.mutation({
             query: (passwordData) => ({
-                url: '/api/profile', // ✅ URL correcte
+                url: '/api/profile',
                 method: 'DELETE',
-                body: passwordData,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(passwordData),
+                credentials: 'include',
             }),
             invalidatesTags: ['Profile', 'Auth'],
         }),
@@ -42,7 +66,8 @@ export const profileApi = apiSlice.injectEndpoints({
 
 export const {
     useGetProfileQuery,
-    useUpdateProfileMutation,
+    useUpdateProfileInfoMutation,
+    useUpdateProfilePictureMutation,
     useChangePasswordMutation,
     useDeleteAccountMutation,
 } = profileApi;

@@ -552,6 +552,58 @@ public function getAllCountries(Request $request): JsonResponse
     #[IsGranted('ROLE_ADMIN')]
     public function createCountry(Request $request): JsonResponse
     {
+        // 🔍 DEBUG TEMPORAIRE - À supprimer après correction
+    if ($this->logger) {
+        $this->logger->info('🔍 DEBUG Création pays - Données reçues:', [
+            'content_type' => $request->headers->get('Content-Type'),
+            'method' => $request->getMethod(),
+            'request_data' => $request->request->all(),
+            'files_data' => array_keys($request->files->all()),
+            'raw_content' => substr($request->getContent(), 0, 200) // Premier 200 caractères
+        ]);
+    }
+
+    $name = $request->request->get('name');
+    $code = $request->request->get('code');
+    $flagUrl = $request->request->get('flag_url');
+    $description = $request->request->get('description');
+    $countryImageFile = $request->files->get('country_image');
+
+    // 🔍 DEBUG TEMPORAIRE - Vérifier les données reçues
+    if ($this->logger) {
+        $this->logger->info('🔍 DEBUG Données extraites:', [
+            'name' => $name,
+            'code' => $code,  
+            'flag_url' => $flagUrl,
+            'description' => $description ? substr($description, 0, 50) : null,
+            'has_image_file' => $countryImageFile !== null,
+            'image_file_info' => $countryImageFile ? [
+                'original_name' => $countryImageFile->getClientOriginalName(),
+                'size' => $countryImageFile->getSize(),
+                'mime_type' => $countryImageFile->getMimeType()
+            ] : null
+        ]);
+    }
+
+    if (!$name || !$code || !$description) {
+        if ($this->logger) {
+            $this->logger->error('❌ Champs manquants:', [
+                'name_missing' => !$name,
+                'code_missing' => !$code,
+                'description_missing' => !$description
+            ]);
+        }
+        
+        return new JsonResponse([
+            'error' => 'Les champs nom, code et description sont obligatoires',
+            'details' => [
+                'name' => $name ? 'OK' : 'MANQUANT',
+                'code' => $code ? 'OK' : 'MANQUANT', 
+                'description' => $description ? 'OK' : 'MANQUANT'
+            ]
+        ], Response::HTTP_BAD_REQUEST);
+    }
+    
         $name = $request->request->get('name');
         $code = $request->request->get('code');
         $flagUrl = $request->request->get('flag_url');

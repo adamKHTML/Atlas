@@ -126,21 +126,46 @@ const CountryForm = () => {
         }
 
         try {
-            // Préparation des données pour l'API Symfony
-            const countryDataToSend = {
-                name: formData.selectedCountry,
-                code: formData.countryCode,
-                flag_url: selectedCountryData.flag,
-                description: formData.introductionText,
-                country_image: formData.countryImage // 🆕 Image sera uploadée dans /uploads/countries/
-            };
+            // Créer un FormData pour l'envoi multipart (avec image)
+            const dataToSend = new FormData();
+
+            // Ajouter les champs texte
+            dataToSend.append('name', formData.selectedCountry);
+            dataToSend.append('code', formData.countryCode);
+            dataToSend.append('flag_url', selectedCountryData.flag);
+            dataToSend.append('description', formData.introductionText);
+
+            // Ajouter l'image si elle existe
+            if (formData.countryImage) {
+                dataToSend.append('country_image', formData.countryImage);
+            }
+
+            // 🔍 DEBUG: Vérifier le FormData
+            console.log('📤 FormData à envoyer:');
+            for (let [key, value] of dataToSend.entries()) {
+                if (value instanceof File) {
+                    console.log(`  ${key}:`, {
+                        name: value.name,
+                        size: value.size,
+                        type: value.type
+                    });
+                } else {
+                    console.log(`  ${key}:`, value);
+                }
+            }
+
+            // 🔍 DEBUG: Vérifier que c'est bien du FormData
+            console.log('📤 Type de données:', dataToSend.constructor.name);
+            console.log('📤 Est-ce du FormData?', dataToSend instanceof FormData);
+
+            console.log('📤 Envoi des données vers l\'API...');
 
             // Appel API
-            const result = await createCountry(countryDataToSend).unwrap();
+            const result = await createCountry(dataToSend).unwrap();
 
             console.log('✅ Pays créé avec succès:', result);
 
-            // Redirection vers l'éditeur de contenu avec l'ID du pays créé
+            // Redirection vers l'éditeur de contenu
             navigate(`/country-content/${result.id}`, {
                 state: {
                     countryData: result,
@@ -150,21 +175,46 @@ const CountryForm = () => {
             });
 
         } catch (error) {
-            console.error('❌ Erreur lors de la création du pays:', error);
+            console.error('❌ Erreur complète lors de la création du pays:', {
+                status: error.status,
+                data: error.data,
+                message: error.message,
+                originalStatus: error.originalStatus,
+                stack: error.stack
+            });
 
-            // Gestion des erreurs spécifiques du backend
+            // 🔍 DEBUG: Afficher les détails de l'erreur
+            if (error.data) {
+                console.error('📄 Détails de l\'erreur serveur:', error.data);
+            }
+
+            // Gestion des erreurs spécifiques
             if (error.status === 409) {
                 setErrors({ selectedCountry: 'Ce pays existe déjà dans le système' });
             } else if (error.status === 413) {
                 setErrors({ countryImage: 'L\'image est trop volumineuse' });
             } else if (error.status === 400) {
-                setErrors({ general: 'Données invalides. Vérifiez vos informations.' });
+                // Vérifier si l'erreur contient des détails spécifiques
+                const errorMessage = error.data?.error || error.data?.message || 'Données invalides. Vérifiez vos informations.';
+                const errorDetails = error.data?.details || '';
+
+                console.error('❌ Erreur 400 détaillée:', {
+                    message: errorMessage,
+                    details: errorDetails
+                });
+
+                setErrors({
+                    general: `${errorMessage}${errorDetails ? ` - ${JSON.stringify(errorDetails)}` : ''}`
+                });
+            } else if (error.status === 422) {
+                setErrors({ general: 'Données de validation incorrectes' });
+            } else if (error.status === 500) {
+                setErrors({ general: 'Erreur serveur interne. Veuillez réessayer plus tard.' });
             } else {
-                setErrors({ general: 'Erreur lors de la création du pays. Veuillez réessayer.' });
+                setErrors({ general: `Erreur lors de la création du pays (${error.status || 'inconnu'}). Veuillez réessayer.` });
             }
         }
     };
-
     const resetForm = () => {
         setFormData({
             selectedCountry: '',

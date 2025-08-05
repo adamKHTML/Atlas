@@ -66,7 +66,7 @@ class ProfileController extends AbstractController
                     'profile_picture' => $user->getProfilePicture() ? 
                         'http://localhost:8000' . $user->getProfilePicture() : null,
                     'is_verified' => $user->isVerified(),
-                    'created_at' => $user->getId() // Simulation de date de création
+                    'created_at' => $user->getId()
                 ]
             ]);
 
@@ -86,11 +86,11 @@ class ProfileController extends AbstractController
     }
 
     /**
-     * PUT /api/profile - Mettre à jour les informations du profil
+     * 🔥 NOUVEAU : PUT /api/profile/info - Mettre à jour les infos texte uniquement
      */
-    #[Route('/profile', name: 'api_update_profile', methods: ['PUT', 'POST'])]
+    #[Route('/profile/info', name: 'api_update_profile_info', methods: ['PUT'])]
     #[IsGranted('ROLE_USER')]
-    public function updateProfile(Request $request): JsonResponse
+    public function updateProfileInfo(Request $request): JsonResponse
     {
         try {
             $user = $this->getUser();
@@ -101,14 +101,17 @@ class ProfileController extends AbstractController
                 return $response;
             }
 
-            // Traitement FormData
-            $data = $request->request->all();
-            $profilePicture = $request->files->get('profile_picture');
+            // 🔥 TRAITEMENT JSON (comme changePassword)
+            $data = json_decode($request->getContent(), true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                $response = new JsonResponse(['error' => 'Données JSON invalides'], 400);
+                $this->addSecurityHeaders($response);
+                return $response;
+            }
 
-            $this->logger->debug('Données reçues pour mise à jour profil', [
-                'user_id' => $user->getId(),
-                'fields' => array_keys($data),
-                'has_file' => $profilePicture !== null
+            $this->logger->debug('🔥 UpdateProfileInfo - Données reçues', [
+                'data' => $data,
+                'user_id' => $user->getId()
             ]);
 
             // Validation des données avec sécurité renforcée
@@ -168,24 +171,6 @@ class ProfileController extends AbstractController
                 }
             }
 
-            // Validation de la photo de profil avec sécurité renforcée
-            if ($profilePicture) {
-                $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-                $maxSize = 5 * 1024 * 1024; // 5MB
-                
-                if (!in_array($profilePicture->getMimeType(), $allowedTypes)) {
-                    $errors[] = 'Format d\'image non autorisé. Utilisez JPG, PNG, GIF ou WebP';
-                }
-                
-                if ($profilePicture->getSize() > $maxSize) {
-                    $errors[] = 'La taille de l\'image ne peut pas dépasser 5MB';
-                }
-                
-                if ($profilePicture->getError() !== UPLOAD_ERR_OK) {
-                    $errors[] = 'Erreur lors de l\'upload de l\'image';
-                }
-            }
-
             // Vérifier l'unicité de l'email si modifié
             if (isset($data['email']) && trim(strip_tags($data['email'])) !== $user->getEmail()) {
                 $existingUser = $this->entityManager->getRepository(User::class)
@@ -212,7 +197,7 @@ class ProfileController extends AbstractController
                 return $response;
             }
 
-            // Mise à jour des champs avec sécurité
+            // 🔥 MISE À JOUR DES CHAMPS avec sécurité
             if (isset($data['firstname'])) {
                 $user->setFirstname(trim(strip_tags($data['firstname'])));
             }
@@ -229,44 +214,22 @@ class ProfileController extends AbstractController
                 $user->setEmail(trim(strip_tags($data['email'])));
             }
 
-            // Gestion sécurisée de la photo de profil
-            if ($profilePicture) {
-                // Supprimer l'ancienne photo si elle existe avec vérification sécurisée du chemin
-                if ($user->getProfilePicture()) {
-                    $oldImagePath = $this->getParameter('kernel.project_dir') . 
-                        '/public' . $user->getProfilePicture();
-                    // Protection contre path traversal
-                    if (file_exists($oldImagePath) && is_file($oldImagePath) && 
-                        strpos(realpath($oldImagePath), realpath($this->getParameter('kernel.project_dir') . '/public')) === 0) {
-                        unlink($oldImagePath);
-                    }
-                }
-
-                // Sauvegarder la nouvelle photo
-                $destination = $this->getParameter('kernel.project_dir') . '/public/uploads/avatars';
-                if (!file_exists($destination) && !mkdir($destination, 0777, true)) {
-                    throw new \RuntimeException('Impossible de créer le dossier uploads/avatars');
-                }
-
-                $filename = uniqid() . '.' . $profilePicture->guessExtension();
-                $profilePicture->move($destination, $filename);
-                $user->setProfilePicture('/uploads/avatars/' . $filename);
-            }
-
             $this->entityManager->flush();
 
-            $this->logger->info('Profil mis à jour avec succès', [
+            $this->logger->info('🔥 Informations profil mises à jour avec succès', [
                 'user_id' => $user->getId()
             ]);
 
             $response = new JsonResponse([
-                'message' => 'Profil mis à jour avec succès',
+                'message' => 'Informations mises à jour avec succès',
                 'user' => [
                     'id' => $user->getId(),
                     'firstname' => htmlspecialchars($user->getFirstname(), ENT_QUOTES, 'UTF-8'),
                     'lastname' => htmlspecialchars($user->getLastname(), ENT_QUOTES, 'UTF-8'),
                     'pseudo' => htmlspecialchars($user->getPseudo(), ENT_QUOTES, 'UTF-8'),
                     'email' => $user->getEmail(),
+                    'roles' => $user->getRoles(),
+                    'isVerified' => $user->isVerified(),
                     'profile_picture' => $user->getProfilePicture() ? 
                         'http://localhost:8000' . $user->getProfilePicture() : null
                 ]
@@ -276,12 +239,164 @@ class ProfileController extends AbstractController
             return $response;
 
         } catch (\Exception $e) {
-            $this->logger->error('Erreur lors de la mise à jour du profil', [
+            $this->logger->error('🔥 Erreur lors de la mise à jour des infos profil', [
                 'error' => $e->getMessage(),
                 'user_id' => $this->getUser()?->getId()
             ]);
             $response = new JsonResponse([
-                'error' => 'Erreur lors de la mise à jour du profil'
+                'error' => 'Erreur lors de la mise à jour des informations'
+            ], 500);
+            $this->addSecurityHeaders($response);
+            return $response;
+        }
+    }
+
+  /**
+     * 🔥 POST /api/profile/picture - Mettre à jour la photo uniquement
+     */
+    #[Route('/profile/picture', name: 'api_update_profile_picture', methods: ['POST'])]
+    #[IsGranted('ROLE_USER')]
+    public function updateProfilePicture(Request $request): JsonResponse
+    {
+        $this->logger->debug('📷 Requête upload', [
+    'content_type' => $request->headers->get('Content-Type'),
+    'has_file' => $request->files->has('profile_picture'),
+    'all_files' => array_keys($request->files->all()),
+]);
+        try {
+            $user = $this->getUser();
+
+            if (!$user) {
+                $response = new JsonResponse(['error' => 'Utilisateur non trouvé'], 404);
+                $this->addSecurityHeaders($response);
+                return $response;
+            }
+
+            $profilePicture = $request->files->get('profile_picture');
+
+            $this->logger->debug('🔥 UpdateProfilePicture - Requête reçue', [
+                'user_id' => $user->getId(),
+                'has_file' => $profilePicture !== null,
+                'content_type' => $request->headers->get('Content-Type'),
+                'method' => $request->getMethod()
+            ]);
+
+            if (!$profilePicture) {
+                $this->logger->warning('🔥 Aucune image fournie', [
+                    'user_id' => $user->getId(),
+                    'files' => array_keys($request->files->all()),
+                    'post_data' => array_keys($request->request->all())
+                ]);
+                $response = new JsonResponse(['error' => 'Aucune image fournie'], 400);
+                $this->addSecurityHeaders($response);
+                return $response;
+            }
+
+            // Validation de la photo de profil avec sécurité renforcée
+            $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            $maxSize = 5 * 1024 * 1024; // 5MB
+            $errors = [];
+
+            $this->logger->debug('🔥 Validation image', [
+                'mime_type' => $profilePicture->getMimeType(),
+                'size' => $profilePicture->getSize(),
+                'error' => $profilePicture->getError(),
+                'original_name' => $profilePicture->getClientOriginalName()
+            ]);
+            
+            if (!in_array($profilePicture->getMimeType(), $allowedTypes)) {
+                $errors[] = 'Format d\'image non autorisé. Utilisez JPG, PNG, GIF ou WebP';
+            }
+            
+            if ($profilePicture->getSize() > $maxSize) {
+                $errors[] = 'La taille de l\'image ne peut pas dépasser 5MB';
+            }
+            
+            if ($profilePicture->getError() !== UPLOAD_ERR_OK) {
+                $errors[] = 'Erreur lors de l\'upload de l\'image (code: ' . $profilePicture->getError() . ')';
+            }
+
+            if (!empty($errors)) {
+                $this->logger->warning('🔥 Erreurs de validation image', [
+                    'errors' => $errors,
+                    'user_id' => $user->getId()
+                ]);
+                $response = new JsonResponse(['errors' => $errors], 400);
+                $this->addSecurityHeaders($response);
+                return $response;
+            }
+
+            // Supprimer l'ancienne photo si elle existe avec vérification sécurisée du chemin
+            if ($user->getProfilePicture()) {
+                $oldImagePath = $this->getParameter('kernel.project_dir') . 
+                    '/public' . $user->getProfilePicture();
+                
+                $this->logger->debug('🔥 Suppression ancienne photo', [
+                    'old_path' => $oldImagePath,
+                    'exists' => file_exists($oldImagePath)
+                ]);
+                
+                // Protection contre path traversal
+                if (file_exists($oldImagePath) && is_file($oldImagePath) && 
+                    strpos(realpath($oldImagePath), realpath($this->getParameter('kernel.project_dir') . '/public')) === 0) {
+                    unlink($oldImagePath);
+                    $this->logger->debug('🔥 Ancienne photo supprimée', ['path' => $oldImagePath]);
+                }
+            }
+
+            // Sauvegarder la nouvelle photo
+            $destination = $this->getParameter('kernel.project_dir') . '/public/uploads/avatars';
+            if (!file_exists($destination)) {
+                if (!mkdir($destination, 0777, true)) {
+                    throw new \RuntimeException('Impossible de créer le dossier uploads/avatars');
+                }
+                $this->logger->debug('🔥 Dossier avatars créé', ['path' => $destination]);
+            }
+
+            $filename = uniqid() . '.' . $profilePicture->guessExtension();
+            $profilePicture->move($destination, $filename);
+            $user->setProfilePicture('/uploads/avatars/' . $filename);
+
+            $this->logger->debug('🔥 Nouvelle photo sauvegardée', [
+                'filename' => $filename,
+                'destination' => $destination,
+                'full_path' => $destination . '/' . $filename
+            ]);
+
+            $this->entityManager->flush();
+
+            $this->logger->info('🔥 Photo de profil mise à jour avec succès', [
+                'user_id' => $user->getId(),
+                'filename' => $filename,
+                'old_picture' => $user->getProfilePicture()
+            ]);
+
+            $response = new JsonResponse([
+                'message' => 'Photo de profil mise à jour avec succès',
+                'profile_picture' => 'http://localhost:8000' . $user->getProfilePicture(),
+                'user' => [
+                    'id' => $user->getId(),
+                    'firstname' => htmlspecialchars($user->getFirstname(), ENT_QUOTES, 'UTF-8'),
+                    'lastname' => htmlspecialchars($user->getLastname(), ENT_QUOTES, 'UTF-8'),
+                    'pseudo' => htmlspecialchars($user->getPseudo(), ENT_QUOTES, 'UTF-8'),
+                    'email' => $user->getEmail(),
+                    'roles' => $user->getRoles(),
+                    'isVerified' => $user->isVerified(),
+                    'profile_picture' => 'http://localhost:8000' . $user->getProfilePicture()
+                ]
+            ]);
+
+            $this->addSecurityHeaders($response);
+            return $response;
+
+        } catch (\Exception $e) {
+            $this->logger->error('🔥 Erreur lors de la mise à jour de la photo', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => $this->getUser()?->getId()
+            ]);
+            $response = new JsonResponse([
+                'error' => 'Erreur lors de la mise à jour de la photo: ' . $e->getMessage()
             ], 500);
             $this->addSecurityHeaders($response);
             return $response;
@@ -291,7 +406,7 @@ class ProfileController extends AbstractController
     /**
      * PUT /api/profile/password - Changer le mot de passe
      */
-    #[Route('/profile/password', name: 'api_change_password', methods: ['PUT', 'POST'])]
+    #[Route('/profile/password', name: 'api_change_password', methods: ['PUT'])]
     #[IsGranted('ROLE_USER')]
     public function changePassword(Request $request): JsonResponse
     {
@@ -400,7 +515,7 @@ class ProfileController extends AbstractController
     }
 
     /**
-     * 🔒 DELETE /api/profile - Supprimer le compte utilisateur (VERSION COMPLÈTE AVEC GESTION SESSION)
+     * DELETE /api/profile - Supprimer le compte utilisateur
      */
     #[Route('/profile', name: 'api_delete_profile', methods: ['DELETE'])]
     #[IsGranted('ROLE_USER')]
@@ -415,7 +530,7 @@ class ProfileController extends AbstractController
                 return $response;
             }
 
-            // 🔒 Validation JSON sécurisée
+            // Validation JSON sécurisée
             $data = json_decode($request->getContent(), true);
             if (json_last_error() !== JSON_ERROR_NONE) {
                 $response = new JsonResponse(['error' => 'Données JSON invalides'], Response::HTTP_BAD_REQUEST);
@@ -423,19 +538,7 @@ class ProfileController extends AbstractController
                 return $response;
             }
 
-            // 🔒 Vérification CSRF pour suppression de compte (optionnel)
-            if (isset($data['_token']) && $this->csrfTokenManager) {
-                if (!$this->isCsrfTokenValid('delete_account', $data['_token'])) {
-                    $this->logger->warning('CSRF token invalid on account deletion', [
-                        'user_id' => $user->getId(),
-                        'ip' => $request->getClientIp(),
-                        'timestamp' => date('Y-m-d H:i:s')
-                    ]);
-                    throw new InvalidCsrfTokenException('Token CSRF invalide');
-                }
-            }
-
-            // 🔒 Validation password obligatoire et sécurisée
+            // Validation password obligatoire et sécurisée
             if (empty($data['password']) || !is_string($data['password'])) {
                 $this->logger->warning('Delete attempt without password', [
                     'user_id' => $user->getId(),
@@ -448,7 +551,7 @@ class ProfileController extends AbstractController
 
             $password = trim($data['password']);
 
-            // 🔒 Vérification password
+            // Vérification password
             if (!$this->passwordHasher->isPasswordValid($user, $password)) {
                 $this->logger->warning('Delete attempt with wrong password', [
                     'user_id' => $user->getId(),
@@ -465,33 +568,22 @@ class ProfileController extends AbstractController
             $userId = $user->getId();
             $userEmail = $user->getEmail();
 
-            // 🔥 DÉBUT DE LA SUPPRESSION FORCÉE AVEC GESTION DE SESSION
-            $this->logger->info('Début de la suppression forcée du compte', [
+            // DÉBUT DE LA SUPPRESSION
+            $this->logger->info('Début de la suppression du compte', [
                 'user_id' => $userId,
                 'email' => $userEmail,
                 'ip' => $request->getClientIp(),
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
 
-            // 🔒 1. INVALIDER LA SESSION IMMÉDIATEMENT
+            // Invalider la session
             $session = $request->getSession();
             $sessionInvalidated = false;
             if ($session && $session->isStarted()) {
                 try {
-                    // Sauvegarder les données importantes avant invalidation
-                    $sessionId = $session->getId();
-                    
-                    // Nettoyer toutes les données de session
                     $session->clear();
-                    
-                    // Invalider complètement la session
                     $session->invalidate();
-                    
                     $sessionInvalidated = true;
-                    $this->logger->debug('Session invalidée avec succès', [
-                        'user_id' => $userId,
-                        'session_id' => $sessionId
-                    ]);
                 } catch (\Exception $e) {
                     $this->logger->warning('Erreur lors de l\'invalidation de session', [
                         'user_id' => $userId,
@@ -500,64 +592,50 @@ class ProfileController extends AbstractController
                 }
             }
 
-            // 🔒 2. Suppression sécurisée de la photo de profil
+            // Supprimer la photo de profil
             if ($user->getProfilePicture()) {
                 $imagePath = $this->getParameter('kernel.project_dir') . 
                     '/public' . $user->getProfilePicture();
-                // 🔒 Vérification sécurisée du chemin (protection contre path traversal)
                 if (file_exists($imagePath) && is_file($imagePath) && 
                     strpos(realpath($imagePath), realpath($this->getParameter('kernel.project_dir') . '/public')) === 0) {
                     unlink($imagePath);
-                    $this->logger->debug('Photo de profil supprimée', ['path' => $imagePath]);
                 }
             }
 
-            // 3. Nettoyer les sessions orphelines en base (si stockées en DB)
-            $this->cleanupOrphanedSessions($userId);
-
-            // 4. Supprimer les réactions de l'utilisateur
+            // Supprimer les réactions
             $reactions = $this->entityManager->getRepository(Reaction::class)
                 ->findBy(['user' => $user]);
-            
             foreach ($reactions as $reaction) {
                 $this->entityManager->remove($reaction);
             }
-            $this->logger->debug('Réactions supprimées', ['count' => count($reactions)]);
 
-            // 5. Supprimer les notifications de l'utilisateur
+            // Supprimer les notifications
             $notifications = $this->entityManager->getRepository(Notification::class)
                 ->findBy(['user' => $user]);
-            
             foreach ($notifications as $notification) {
                 $this->entityManager->remove($notification);
             }
-            $this->logger->debug('Notifications supprimées', ['count' => count($notifications)]);
 
-            // 6. Supprimer l'historique de bannissements
+            // Supprimer les bans
             $bans = $this->entityManager->getRepository(Ban::class)
                 ->findBy(['user' => $user]);
-            
             foreach ($bans as $ban) {
                 $this->entityManager->remove($ban);
             }
-            $this->logger->debug('Bans supprimés', ['count' => count($bans)]);
 
-            // 7. Anonymiser les messages de l'utilisateur (plutôt que les supprimer)
+            // Anonymiser les messages
             $messages = $this->entityManager->getRepository(Message::class)
                 ->findBy(['user' => $user]);
-            
             foreach ($messages as $message) {
-                // Anonymiser plutôt que supprimer pour préserver l'intégrité des discussions
-                $message->setUser(null); // Met le user_id à NULL
+                $message->setUser(null);
                 $message->setContent('[Message supprimé - Utilisateur supprimé]');
                 $this->entityManager->persist($message);
             }
-            $this->logger->debug('Messages anonymisés', ['count' => count($messages)]);
 
-            // 8. Forcer l'exécution des suppressions avant de supprimer l'utilisateur
+            // Forcer l'exécution
             $this->entityManager->flush();
 
-            // 9. 🔥 SUPPRIMER L'UTILISATEUR
+            // Supprimer l'utilisateur
             $this->entityManager->remove($user);
             $this->entityManager->flush();
 
@@ -566,50 +644,31 @@ class ProfileController extends AbstractController
                 'email' => $userEmail,
                 'ip' => $request->getClientIp(),
                 'session_invalidated' => $sessionInvalidated,
-                'reactions_deleted' => count($reactions),
-                'notifications_deleted' => count($notifications),
-                'bans_deleted' => count($bans),
-                'messages_anonymized' => count($messages),
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
 
-            // 🔥 RÉPONSE SPÉCIALE POUR INDIQUER QUE LA SESSION EST TERMINÉE
             $response = new JsonResponse([
                 'message' => 'Compte supprimé avec succès',
-                'session_ended' => true, // Flag pour indiquer au frontend que la session est terminée
+                'session_ended' => true,
                 'user_deleted' => true,
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
             
-            // 🔥 Headers spéciaux pour indiquer la fin de session
             $response->headers->set('X-Session-Ended', 'true');
             $response->headers->set('X-Account-Deleted', 'true');
             $response->headers->set('X-User-Id-Deleted', (string)$userId);
             
-            // 🔒 Headers de sécurité renforcés pour suppression
             $this->addSecurityHeaders($response, true);
             
             return $response;
 
-        } catch (\Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException $e) {
-            $this->logger->error('Erreur de contrainte de clé étrangère lors de la suppression', [
-                'error' => $e->getMessage(),
-                'user_id' => $this->getUser()?->getId()
-            ]);
-            $response = new JsonResponse([
-                'error' => 'Impossible de supprimer le compte en raison de données liées. Contactez l\'administrateur.'
-            ], 500);
-            $this->addSecurityHeaders($response);
-            return $response;
         } catch (\Exception $e) {
             $this->logger->error('Erreur lors de la suppression du compte', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
                 'user_id' => $this->getUser()?->getId()
             ]);
             $response = new JsonResponse([
-                'error' => 'Erreur lors de la suppression du compte',
-                'debug' => $e->getMessage() // Temporaire pour debug, à retirer en production
+                'error' => 'Erreur lors de la suppression du compte'
             ], 500);
             $this->addSecurityHeaders($response);
             return $response;
@@ -617,56 +676,19 @@ class ProfileController extends AbstractController
     }
 
     /**
-     * 🔒 Méthode privée pour nettoyer les sessions orphelines
-     */
-    private function cleanupOrphanedSessions(int $userId): void
-    {
-        try {
-            // Si vous utilisez doctrine/doctrine-bundle avec sessions en base de données
-            // Vous pouvez adapter cette requête selon votre configuration
-            
-            // Exemple pour des sessions stockées en base via PdoSessionHandler
-            $connection = $this->entityManager->getConnection();
-            
-            // Nettoyer les sessions liées à cet utilisateur (adaptez selon votre schéma)
-            $sql = "DELETE FROM sessions WHERE sess_data LIKE :userId";
-            $stmt = $connection->prepare($sql);
-            $stmt->executeStatement(['userId' => '%user_id";i:' . $userId . ';%']);
-            
-            $this->logger->debug('Sessions orphelines nettoyées en base', [
-                'user_id' => $userId,
-                'affected_rows' => $stmt->rowCount()
-            ]);
-            
-        } catch (\Exception $e) {
-            // Ne pas faire échouer la suppression si le nettoyage des sessions échoue
-            $this->logger->warning('Impossible de nettoyer les sessions orphelines', [
-                'user_id' => $userId,
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * 🔒 Méthode privée pour ajouter les headers de sécurité
-     * @param JsonResponse $response
-     * @param bool $isAccountDeletion Sécurité renforcée pour suppression de compte
+     * Méthode privée pour ajouter les headers de sécurité
      */
     private function addSecurityHeaders(JsonResponse $response, bool $isAccountDeletion = false): void
     {
-        // Headers de sécurité standards
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         $response->headers->set('X-Frame-Options', 'DENY');
         $response->headers->set('X-XSS-Protection', '1; mode=block');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set('Content-Security-Policy', "default-src 'self'");
-        
-        // 🔒 Désactiver complètement la mise en cache
         $response->headers->set('Cache-Control', 'no-cache, no-store, must-revalidate, private');
         $response->headers->set('Pragma', 'no-cache');
         $response->headers->set('Expires', '0');
         
-        // 🔒 Headers spéciaux pour suppression de compte
         if ($isAccountDeletion) {
             $response->headers->set('X-Require-Fresh-Auth', 'true');
             $response->headers->set('X-Clear-All-Caches', 'true');
