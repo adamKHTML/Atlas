@@ -6,7 +6,6 @@ import { profileApi } from '../api/endpoints/profile';
 import { analyticsApi } from '../api/endpoints/admin/analytics';
 import authReducer from './slices/authSlice';
 
-
 // Configuration du store Redux
 export const store = configureStore({
     reducer: {

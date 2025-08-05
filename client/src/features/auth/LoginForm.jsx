@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLoginMutation } from '../../api/endpoints/auth';
-import { useDispatch } from 'react-redux';
-import { setUser } from '../../store/slices/authSlice';
 
 export const LoginForm = () => {
     const [credentials, setCredentials] = useState({
@@ -14,7 +12,6 @@ export const LoginForm = () => {
     const [errors, setErrors] = useState({});
     const [login, { isLoading, error }] = useLoginMutation();
     const navigate = useNavigate();
-    const dispatch = useDispatch();
 
     /**
      * 🔒 Validation sécurisée côté client
@@ -64,12 +61,11 @@ export const LoginForm = () => {
     };
 
     /**
-     * 🔒 Soumission sécurisée du formulaire
+     * 🔒 Soumission sécurisée avec cookies
      */
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // 🔒 Validation côté client
         const validationErrors = validateForm();
         if (Object.keys(validationErrors).length > 0) {
             setErrors(validationErrors);
@@ -77,24 +73,17 @@ export const LoginForm = () => {
         }
 
         try {
-            const response = await login({
-                email: credentials.email.toLowerCase().trim(),
+            // ✅ Login automatique avec cookies - Redux géré par authApi
+            await login({
+                email: credentials.email.toLowerCase(),
                 password: credentials.password
             }).unwrap();
 
-            if (response.success && response.user) {
-                // ✅ Connexion réussie
-                setErrors({});
-                dispatch(setUser(response.user));
+            // ✅ Succès - Redux géré automatiquement par les handlers Symfony
+            setErrors({});
+            setCredentials({ email: '', password: '' });
+            navigate('/dashboard');
 
-                // 🔒 Log sécurisé (sans données sensibles)
-                console.log('Connexion réussie pour l\'utilisateur:', response.user.id);
-
-                // 🔒 Nettoyage du formulaire
-                setCredentials({ email: '', password: '' });
-
-                navigate('/dashboard');
-            }
         } catch (err) {
             console.error('Erreur login:', err?.status || 'Erreur inconnue');
 

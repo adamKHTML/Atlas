@@ -198,76 +198,102 @@ class CountryController extends AbstractController
     // 📌 ENDPOINTS PUBLICS SÉCURISÉS
     // ==========================================
 
-    #[Route('/api/countries', name: 'api_countries_list', methods: ['GET'])]
-    public function getAllCountries(Request $request): JsonResponse
-    {
-        try {
-            // 🔒 VALIDATION ET SANITISATION DES PARAMÈTRES
-            $page = $this->sanitizeIntParam($request->query->get('page', '1'), 1, 1, 100);
-            $limit = $this->sanitizeIntParam($request->query->get('limit', '12'), 12, 1, 50);
-            $withImages = $this->sanitizeBoolParam($request->query->get('with_images', 'false'));
-            
-            // 🔒 PROTECTION CONTRE LES ATTAQUES DE PAGINATION
-            $offset = ($page - 1) * $limit;
-            if ($offset > 10000) { // Limite raisonnable
-                return new JsonResponse([
-                    'error' => 'Page trop élevée, maximum 200 pages'
-                ], Response::HTTP_BAD_REQUEST);
-            }
-
-            // 🔒 REQUÊTE OPTIMISÉE AVEC LIMITATION
-            $countries = $this->countryRepository->findBy(
-                [], 
-                ['created_at' => 'DESC'], 
-                $limit, 
-                $offset
-            );
-            
-            $total = $this->countryRepository->count([]);
-
-            $countriesData = [];
-            foreach ($countries as $country) {
-                if ($withImages) {
-                    $contents = $this->contentRepository->findBy(['country' => $country]);
-                    $countryData = $this->serializeCountryWithImages($country, $contents);
-                } else {
-                    $countryData = $this->serializeCountryBasic($country);
-                }
-                $countriesData[] = $countryData;
-            }
-
-            $responseData = [
-                'countries' => $countriesData,
-                'pagination' => [
-                    'page' => $page,
-                    'limit' => $limit,
-                    'total' => $total,
-                    'pages' => ceil($total / $limit)
-                ]
-            ];
-
-            // 🔒 CACHE HEADERS POUR OPTIMISER LA PERFORMANCE
-            $response = new JsonResponse($responseData);
-            $response->setMaxAge(300); // 5 minutes de cache
-            $response->setPublic();
-
-            return $response;
-
-        } catch (\Exception $e) {
-            if ($this->logger) {
-                $this->logger->error('❌ Erreur lors de la récupération des pays', [
-                    'error' => $e->getMessage(),
-                    'ip' => $request->getClientIp(),
-                    'user_agent' => $request->headers->get('User-Agent')
-                ]);
-            }
-
-            return new JsonResponse([
-                'error' => 'Erreur lors de la récupération des pays'
-            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+  
+#[Route('/api/countries', name: 'api_countries_list', methods: ['GET'])]
+public function getAllCountries(Request $request): JsonResponse
+{
+    try {
+        // 🔍 DEBUG : Log de chaque requête GET
+        if ($this->logger) {
+            $this->logger->info('📋 Requête GET /api/countries reçue', [
+                'params' => $request->query->all(),
+                'timestamp' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+                'ip' => $request->getClientIp()
+            ]);
         }
-    }
 
+        // ... votre code existant ...
+        $page = $this->sanitizeIntParam($request->query->get('page', '1'), 1, 1, 100);
+        $limit = $this->sanitizeIntParam($request->query->get('limit', '12'), 12, 1, 50);
+        $withImages = $this->sanitizeBoolParam($request->query->get('with_images', 'false'));
+        
+        $offset = ($page - 1) * $limit;
+        if ($offset > 10000) {
+            return new JsonResponse([
+                'error' => 'Page trop élevée, maximum 200 pages'
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $countries = $this->countryRepository->findBy(
+            [], 
+            ['created_at' => 'DESC'], 
+            $limit, 
+            $offset
+        );
+        
+        $total = $this->countryRepository->count([]);
+
+        // 🔍 DEBUG : Log du résultat
+        if ($this->logger) {
+            $this->logger->info('📊 Résultat requête countries:', [
+                'total_in_db' => $total,
+                'returned_count' => count($countries),
+                'page' => $page,
+                'limit' => $limit,
+                'country_ids' => array_map(fn($c) => $c->getId(), $countries),
+                'country_names' => array_map(fn($c) => $c->getName(), $countries)
+            ]);
+        }
+
+        $countriesData = [];
+        foreach ($countries as $country) {
+            if ($withImages) {
+                $contents = $this->contentRepository->findBy(['country' => $country]);
+                $countryData = $this->serializeCountryWithImages($country, $contents);
+            } else {
+                $countryData = $this->serializeCountryBasic($country);
+            }
+            $countriesData[] = $countryData;
+        }
+
+        $responseData = [
+            'countries' => $countriesData,
+            'pagination' => [
+                'page' => $page,
+                'limit' => $limit,
+                'total' => $total,
+                'pages' => ceil($total / $limit)
+            ],
+            // 🔍 DEBUG INFO dans la réponse
+            'debug_info' => [
+                'timestamp' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+                'fresh_from_db' => true,
+                'total_countries_in_db' => $total
+            ]
+        ];
+
+        // Headers sans cache pour forcer le refresh
+        $response = new JsonResponse($responseData);
+        $response->headers->set('Cache-Control', 'no-cache, no-store, must-revalidate');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('Expires', '0');
+
+        return $response;
+
+    } catch (\Exception $e) {
+        if ($this->logger) {
+            $this->logger->error('❌ Erreur lors de la récupération des pays', [
+                'error' => $e->getMessage(),
+                'ip' => $request->getClientIp(),
+                'user_agent' => $request->headers->get('User-Agent')
+            ]);
+        }
+
+        return new JsonResponse([
+            'error' => 'Erreur lors de la récupération des pays'
+        ], Response::HTTP_INTERNAL_SERVER_ERROR);
+    }
+}
     #[Route('/api/countries/{id}', name: 'api_country_details', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getCountryById(int $id, Request $request): JsonResponse
     {
@@ -454,8 +480,73 @@ class CountryController extends AbstractController
     }
 
     // ==========================================
-    // 📌 ENDPOINTS ADMIN PROTÉGÉS (inchangés)
+    // 📌 ENDPOINTS ADMIN PROTÉGÉS
     // ==========================================
+
+    #[Route('/api/admin/countries', name: 'api_admin_countries_list', methods: ['GET'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function getCountriesAdmin(Request $request): JsonResponse
+    {
+        try {
+            $page = $this->sanitizeIntParam($request->query->get('page', '1'), 1, 1, 100);
+            $limit = $this->sanitizeIntParam($request->query->get('limit', '10'), 10, 1, 50);
+            $search = $this->sanitizeSearchTerm($request->query->get('search', ''));
+
+            $offset = ($page - 1) * $limit;
+
+            // Construction de la requête avec recherche optionnelle
+            $qb = $this->countryRepository->createQueryBuilder('c');
+            
+            if (!empty($search)) {
+                $qb->where('c.name LIKE :search OR c.description LIKE :search')
+                   ->setParameter('search', '%' . $search . '%');
+            }
+            
+            $qb->orderBy('c.created_at', 'DESC')
+               ->setFirstResult($offset)
+               ->setMaxResults($limit);
+
+            $countries = $qb->getQuery()->getResult();
+
+            // Compter le total pour la pagination
+            $totalQb = $this->countryRepository->createQueryBuilder('c')
+                ->select('COUNT(c.id)');
+                
+            if (!empty($search)) {
+                $totalQb->where('c.name LIKE :search OR c.description LIKE :search')
+                       ->setParameter('search', '%' . $search . '%');
+            }
+            
+            $total = $totalQb->getQuery()->getSingleScalarResult();
+
+            $countriesData = [];
+            foreach ($countries as $country) {
+                $countriesData[] = $this->serializeCountryAdmin($country);
+            }
+
+            return new JsonResponse([
+                'countries' => $countriesData,
+                'pagination' => [
+                    'page' => $page,
+                    'limit' => $limit,
+                    'total' => $total,
+                    'pages' => ceil($total / $limit)
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            if ($this->logger) {
+                $this->logger->error('❌ Erreur lors de la récupération des pays admin', [
+                    'error' => $e->getMessage(),
+                    'admin_user' => $this->getUser()?->getEmail()
+                ]);
+            }
+
+            return new JsonResponse([
+                'error' => 'Erreur lors de la récupération des pays'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
 
     #[Route('/api/admin/countries', name: 'api_admin_country_create', methods: ['POST'])]
     #[IsGranted('ROLE_ADMIN')]
@@ -499,16 +590,526 @@ class CountryController extends AbstractController
             $this->entityManager->persist($country);
             $this->entityManager->flush();
 
+            if ($this->logger) {
+                $this->logger->info('✅ Pays créé avec succès', [
+                    'country_id' => $country->getId(),
+                    'country_name' => $name,
+                    'admin_user' => $this->getUser()?->getEmail()
+                ]);
+            }
+
             return new JsonResponse($this->serializeCountryAdmin($country), Response::HTTP_CREATED);
 
         } catch (\Exception $e) {
+            if ($this->logger) {
+                $this->logger->error('❌ Erreur lors de la création du pays', [
+                    'error' => $e->getMessage(),
+                    'admin_user' => $this->getUser()?->getEmail()
+                ]);
+            }
+
             return new JsonResponse([
                 'error' => 'Erreur lors de la création du pays'
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
-    // [Tous les autres endpoints admin restent identiques...]
+    #[Route('/api/admin/countries/{id}', name: 'api_admin_country_by_id', methods: ['GET'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function getCountryByIdAdmin(int $id): JsonResponse
+    {
+        if ($id <= 0 || $id > 999999) {
+            return new JsonResponse(['error' => 'ID invalide'], Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $country = $this->countryRepository->find($id);
+
+            if (!$country) {
+                return new JsonResponse(['error' => 'Pays introuvable'], Response::HTTP_NOT_FOUND);
+            }
+
+            return new JsonResponse($this->serializeCountryAdmin($country));
+
+        } catch (\Exception $e) {
+            if ($this->logger) {
+                $this->logger->error('❌ Erreur lors de la récupération du pays admin', [
+                    'country_id' => $id,
+                    'error' => $e->getMessage(),
+                    'admin_user' => $this->getUser()?->getEmail()
+                ]);
+            }
+
+            return new JsonResponse([
+                'error' => 'Erreur lors de la récupération du pays'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+   #[Route('/api/admin/countries/{id}', name: 'api_admin_country_update', methods: ['PUT'], requirements: ['id' => '\d+'])]
+#[IsGranted('ROLE_ADMIN')]
+public function updateCountry(int $id, Request $request): JsonResponse
+{
+    if ($id <= 0 || $id > 999999) {
+        return new JsonResponse(['error' => 'ID invalide'], Response::HTTP_BAD_REQUEST);
+    }
+
+    try {
+        // 🔍 DEBUG : État AVANT modification
+        $allCountriesBefore = $this->countryRepository->findAll();
+        $country = $this->countryRepository->find($id);
+
+        if (!$country) {
+            return new JsonResponse(['error' => 'Pays introuvable'], Response::HTTP_NOT_FOUND);
+        }
+
+        // Log état avant modification
+        if ($this->logger) {
+            $this->logger->info('🔍 AVANT modification pays:', [
+                'country_id' => $id,
+                'current_name' => $country->getName(),
+                'current_code' => $country->getCode(),
+                'current_description' => substr($country->getDescription() ?? '', 0, 100),
+                'total_countries' => count($allCountriesBefore),
+                'admin_user' => $this->getUser()?->getEmail()
+            ]);
+        }
+
+        // Vérifier si c'est du FormData (avec image) ou du JSON
+        $contentType = $request->headers->get('Content-Type');
+        
+        if (str_contains($contentType, 'multipart/form-data')) {
+            // FormData avec potentiellement une nouvelle image
+            $name = $request->request->get('name');
+            $code = $request->request->get('code');
+            $flagUrl = $request->request->get('flag_url');
+            $description = $request->request->get('description');
+            $countryImageFile = $request->files->get('country_image');
+        } else {
+            // JSON classique
+            $data = json_decode($request->getContent(), true);
+            if (!$data) {
+                return new JsonResponse(['error' => 'Données JSON invalides'], Response::HTTP_BAD_REQUEST);
+            }
+            
+            $name = $data['name'] ?? null;
+            $code = $data['code'] ?? null;
+            $flagUrl = $data['flag_url'] ?? null;
+            $description = $data['description'] ?? null;
+            $countryImageFile = null;
+        }
+
+        // Validation des champs obligatoires
+        if (!$name || !$code || !$description) {
+            return new JsonResponse([
+                'error' => 'Les champs nom, code et description sont obligatoires'
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Vérifier que le nom n'existe pas déjà (sauf pour ce pays)
+        $existingCountry = $this->countryRepository->findOneBy(['name' => $name]);
+        if ($existingCountry && $existingCountry->getId() !== $id) {
+            return new JsonResponse([
+                'error' => 'Ce nom de pays existe déjà'
+            ], Response::HTTP_CONFLICT);
+        }
+
+        // 🔍 DEBUG : Log des changements
+        if ($this->logger) {
+            $this->logger->info('📝 Modifications à appliquer:', [
+                'country_id' => $id,
+                'changes' => [
+                    'name' => ['old' => $country->getName(), 'new' => $name],
+                    'code' => ['old' => $country->getCode(), 'new' => $code],
+                    'description' => ['old' => substr($country->getDescription() ?? '', 0, 50), 'new' => substr($description, 0, 50)],
+                    'flag_url' => ['old' => $country->getFlagUrl(), 'new' => $flagUrl],
+                    'has_new_image' => $countryImageFile !== null
+                ]
+            ]);
+        }
+
+        // Mise à jour des données
+        $country->setName($name);
+        $country->setCode($code);
+        $country->setFlagUrl($flagUrl);
+        $country->setDescription($description);
+        $country->setUpdatedAt(new \DateTimeImmutable());
+
+        // Gestion de la nouvelle image si fournie
+        if ($countryImageFile) {
+            $countryImagePath = $this->handleImageUpload($countryImageFile, 'countries');
+            if ($countryImagePath) {
+                $country->setCountryImage($countryImagePath);
+                
+                if ($this->logger) {
+                    $this->logger->info('📷 Nouvelle image uploadée:', [
+                        'country_id' => $id,
+                        'image_path' => $countryImagePath
+                    ]);
+                }
+            }
+        }
+
+        $this->entityManager->flush();
+
+        // 🔍 DEBUG : État APRÈS modification
+        $allCountriesAfter = $this->countryRepository->findAll();
+        $updatedCountry = $this->countryRepository->find($id); // Recharger depuis la DB
+
+        if ($this->logger) {
+            $this->logger->info('✅ APRÈS modification pays:', [
+                'country_id' => $id,
+                'updated_name' => $updatedCountry->getName(),
+                'updated_code' => $updatedCountry->getCode(),
+                'updated_description' => substr($updatedCountry->getDescription() ?? '', 0, 100),
+                'updated_at' => $updatedCountry->getUpdatedAt()->format('Y-m-d H:i:s'),
+                'total_countries' => count($allCountriesAfter),
+                'modification_confirmed' => true
+            ]);
+        }
+
+        // 🚀 RÉPONSE ENRICHIE avec état de la base
+        $response = $this->serializeCountryAdmin($updatedCountry);
+        $response['debug_info'] = [
+            'modification_timestamp' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+            'total_countries' => count($allCountriesAfter),
+            'modification_confirmed' => true,
+            'updated_fields' => ['name', 'code', 'description', 'flag_url'],
+            'fresh_from_db' => true
+        ];
+
+        return new JsonResponse($response);
+
+    } catch (\Exception $e) {
+        if ($this->logger) {
+            $this->logger->error('❌ Erreur lors de la modification du pays', [
+                'country_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'admin_user' => $this->getUser()?->getEmail()
+            ]);
+        }
+
+        return new JsonResponse([
+            'error' => 'Erreur lors de la modification du pays',
+            'details' => $e->getMessage()
+        ], Response::HTTP_INTERNAL_SERVER_ERROR);
+    }
+}
+
+   
+#[Route('/api/admin/countries/{id}', name: 'api_admin_country_delete', methods: ['DELETE'], requirements: ['id' => '\d+'])]
+#[IsGranted('ROLE_ADMIN')]
+public function deleteCountry(int $id, Request $request): JsonResponse
+{
+    if ($id <= 0 || $id > 999999) {
+        return new JsonResponse(['error' => 'ID invalide'], Response::HTTP_BAD_REQUEST);
+    }
+
+    try {
+        // 🔍 DEBUG : Vérifier les pays AVANT suppression
+        $allCountriesBefore = $this->countryRepository->findAll();
+        if ($this->logger) {
+            $this->logger->info('🔍 AVANT suppression - Pays en base:', [
+                'total_countries' => count($allCountriesBefore),
+                'country_ids' => array_map(fn($c) => $c->getId(), $allCountriesBefore),
+                'country_to_delete' => $id
+            ]);
+        }
+
+        $country = $this->countryRepository->find($id);
+
+        if (!$country) {
+            if ($this->logger) {
+                $this->logger->warning('❌ Pays non trouvé pour suppression', [
+                    'requested_id' => $id,
+                    'existing_ids' => array_map(fn($c) => $c->getId(), $allCountriesBefore)
+                ]);
+            }
+            return new JsonResponse(['error' => 'Pays introuvable'], Response::HTTP_NOT_FOUND);
+        }
+
+        // Vérifier s'il y a du contenu associé
+        $contentCount = $this->contentRepository->count(['country' => $country]);
+        
+        if ($contentCount > 0) {
+            // Supprimer d'abord tout le contenu associé
+            $contents = $this->contentRepository->findBy(['country' => $country]);
+            foreach ($contents as $content) {
+                $this->entityManager->remove($content);
+            }
+            
+            if ($this->logger) {
+                $this->logger->info('🗑️ Contenu associé supprimé:', [
+                    'country_id' => $id,
+                    'content_count' => $contentCount
+                ]);
+            }
+        }
+
+        $countryName = $country->getName();
+
+        // Supprimer le pays
+        $this->entityManager->remove($country);
+        $this->entityManager->flush();
+
+        // 🔍 DEBUG : Vérifier les pays APRÈS suppression
+        $allCountriesAfter = $this->countryRepository->findAll();
+        if ($this->logger) {
+            $this->logger->info('✅ APRÈS suppression - Pays en base:', [
+                'total_countries_before' => count($allCountriesBefore),
+                'total_countries_after' => count($allCountriesAfter),
+                'deleted_country_name' => $countryName,
+                'remaining_country_ids' => array_map(fn($c) => $c->getId(), $allCountriesAfter)
+            ]);
+        }
+
+        // 🚀 RÉPONSE ENRICHIE avec état de la base
+        return new JsonResponse([
+            'message' => 'Pays supprimé avec succès',
+            'deleted_country' => $countryName,
+            'deleted_content_count' => $contentCount,
+            'deleted_country_id' => $id,
+            // 🔍 INFO DE DEBUG
+            'debug_info' => [
+                'countries_before_delete' => count($allCountriesBefore),
+                'countries_after_delete' => count($allCountriesAfter),
+                'remaining_country_ids' => array_map(fn($c) => $c->getId(), $allCountriesAfter),
+                'deletion_confirmed' => true,
+                'timestamp' => (new \DateTimeImmutable())->format('Y-m-d H:i:s')
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        if ($this->logger) {
+            $this->logger->error('❌ Erreur lors de la suppression du pays', [
+                'country_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'admin_user' => $this->getUser()?->getEmail()
+            ]);
+        }
+
+        return new JsonResponse([
+            'error' => 'Erreur lors de la suppression du pays',
+            'details' => $e->getMessage()
+        ], Response::HTTP_INTERNAL_SERVER_ERROR);
+    }
+}
+
+   
+#[Route('/api/admin/countries/{id}/content', name: 'api_admin_country_content_update', methods: ['PUT'], requirements: ['id' => '\d+'])]
+#[IsGranted('ROLE_ADMIN')]
+public function updateCountryContent(int $id, Request $request): JsonResponse
+{
+    if ($id <= 0 || $id > 999999) {
+        return new JsonResponse(['error' => 'ID invalide'], Response::HTTP_BAD_REQUEST);
+    }
+
+    try {
+        $country = $this->countryRepository->find($id);
+
+        if (!$country) {
+            return new JsonResponse(['error' => 'Pays introuvable'], Response::HTTP_NOT_FOUND);
+        }
+
+        // 🔍 DEBUG : État AVANT mise à jour contenu
+        $existingContents = $this->contentRepository->findBy(['country' => $country]);
+        if ($this->logger) {
+            $this->logger->info('🔍 AVANT mise à jour contenu:', [
+                'country_id' => $id,
+                'country_name' => $country->getName(),
+                'existing_content_count' => count($existingContents),
+                'existing_content_ids' => array_map(fn($c) => $c->getId(), $existingContents)
+            ]);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        if (!$data || !isset($data['sections'])) {
+            return new JsonResponse(['error' => 'Données invalides'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $sections = $data['sections'];
+
+        if (!is_array($sections)) {
+            return new JsonResponse(['error' => 'Les sections doivent être un tableau'], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Supprimer l'ancien contenu
+        foreach ($existingContents as $content) {
+            $this->entityManager->remove($content);
+        }
+
+        // Créer le nouveau contenu
+        $newContentIds = [];
+        foreach ($sections as $index => $sectionData) {
+            if (!isset($sectionData['title']) || !isset($sectionData['type'])) {
+                continue; // Ignorer les sections invalides
+            }
+
+            $content = new Content();
+            $content->setTitle($sectionData['title']);
+            $content->setType($sectionData['type']);
+            $content->setSection($sectionData['content'] ?? ''); // L'URL d'image ou le contenu texte
+            $content->setCountry($country);
+            $content->setCreatedAt(new \DateTimeImmutable());
+            $content->setUpdatedAt(new \DateTimeImmutable());
+
+            $this->entityManager->persist($content);
+            $this->entityManager->flush(); // Flush pour obtenir l'ID
+            $newContentIds[] = $content->getId();
+        }
+
+        // 🔍 DEBUG : État APRÈS mise à jour contenu
+        $newContents = $this->contentRepository->findBy(['country' => $country]);
+        if ($this->logger) {
+            $this->logger->info('✅ APRÈS mise à jour contenu:', [
+                'country_id' => $id,
+                'country_name' => $country->getName(),
+                'old_content_count' => count($existingContents),
+                'new_content_count' => count($newContents),
+                'new_content_ids' => $newContentIds,
+                'sections_received' => count($sections),
+                'content_update_confirmed' => true
+            ]);
+        }
+
+        // 🚀 RÉPONSE ENRICHIE
+        return new JsonResponse([
+            'message' => 'Contenu mis à jour avec succès',
+            'country' => $this->serializeCountryAdmin($country),
+            'sections_count' => count($sections),
+            'debug_info' => [
+                'update_timestamp' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+                'old_content_count' => count($existingContents),
+                'new_content_count' => count($newContents),
+                'content_update_confirmed' => true,
+                'fresh_from_db' => true
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        if ($this->logger) {
+            $this->logger->error('❌ Erreur lors de la mise à jour du contenu', [
+                'country_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'admin_user' => $this->getUser()?->getEmail()
+            ]);
+        }
+
+        return new JsonResponse([
+            'error' => 'Erreur lors de la mise à jour du contenu',
+            'details' => $e->getMessage()
+        ], Response::HTTP_INTERNAL_SERVER_ERROR);
+    }
+}
+
+    #[Route('/api/admin/countries/upload-section-image', name: 'api_admin_section_image_upload', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function uploadSectionImage(Request $request): JsonResponse
+    {
+        try {
+            $imageFile = $request->files->get('section_image');
+            $countryId = $request->request->get('country_id');
+
+            if (!$imageFile) {
+                return new JsonResponse(['error' => 'Aucun fichier image fourni'], Response::HTTP_BAD_REQUEST);
+            }
+
+            if (!$countryId) {
+                return new JsonResponse(['error' => 'ID du pays manquant'], Response::HTTP_BAD_REQUEST);
+            }
+
+            // Vérifier que le pays existe
+            $country = $this->countryRepository->find($countryId);
+            if (!$country) {
+                return new JsonResponse(['error' => 'Pays introuvable'], Response::HTTP_NOT_FOUND);
+            }
+
+            // Upload de l'image dans le dossier 'sections'
+            $imageUrl = $this->handleImageUpload($imageFile, 'sections');
+
+            if (!$imageUrl) {
+                return new JsonResponse(['error' => 'Erreur lors de l\'upload de l\'image'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
+
+            if ($this->logger) {
+                $this->logger->info('✅ Image de section uploadée avec succès', [
+                    'country_id' => $countryId,
+                    'image_url' => $imageUrl,
+                    'admin_user' => $this->getUser()?->getEmail()
+                ]);
+            }
+
+            return new JsonResponse([
+                'image_url' => $imageUrl,
+                'message' => 'Image uploadée avec succès'
+            ]);
+
+        } catch (\Exception $e) {
+            if ($this->logger) {
+                $this->logger->error('❌ Erreur lors de l\'upload d\'image de section', [
+                    'error' => $e->getMessage(),
+                    'admin_user' => $this->getUser()?->getEmail()
+                ]);
+            }
+
+            return new JsonResponse([
+                'error' => 'Erreur lors de l\'upload de l\'image'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[Route('/api/admin/countries/stats', name: 'api_admin_countries_stats', methods: ['GET'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function getCountriesStats(): JsonResponse
+    {
+        try {
+            $totalCountries = $this->countryRepository->count([]);
+            $totalContent = $this->contentRepository->count([]);
+            
+            // Statistiques par type de contenu
+            $contentStats = [];
+            $contentTypes = ['text', 'image', 'video'];
+            
+            foreach ($contentTypes as $type) {
+                $contentStats[$type] = $this->contentRepository->count(['type' => $type]);
+            }
+
+            // Pays récents (derniers 30 jours)
+            $thirtyDaysAgo = new \DateTimeImmutable('-30 days');
+            $recentCountries = $this->countryRepository->createQueryBuilder('c')
+                ->select('COUNT(c.id)')
+                ->where('c.created_at >= :date')
+                ->setParameter('date', $thirtyDaysAgo)
+                ->getQuery()
+                ->getSingleScalarResult();
+
+            return new JsonResponse([
+                'total_countries' => $totalCountries,
+                'total_content' => $totalContent,
+                'recent_countries' => $recentCountries,
+                'content_by_type' => $contentStats
+            ]);
+
+        } catch (\Exception $e) {
+            if ($this->logger) {
+                $this->logger->error('❌ Erreur lors de la récupération des statistiques', [
+                    'error' => $e->getMessage(),
+                    'admin_user' => $this->getUser()?->getEmail()
+                ]);
+            }
+
+            return new JsonResponse([
+                'error' => 'Erreur lors de la récupération des statistiques'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    // ==========================================
+    // 📁 MÉTHODE UTILITAIRE POUR L'UPLOAD
+    // ==========================================
 
     /**
      * 📁 Gestion d'upload d'images avec sécurité renforcée

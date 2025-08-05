@@ -48,12 +48,13 @@ export const countriesApi = apiSlice.injectEndpoints({
             }),
         }),
 
+        // 🔍 ENDPOINT POUR UN PAYS SPÉCIFIQUE
         getCountryById: builder.query({
             query: (id) => `/api/countries/${id}`,
             providesTags: (result, error, id) => [{ type: 'Countries', id }],
         }),
 
-        // Endpoint pour CountryPage - récupère pays + contenu complet
+        // 📖 ENDPOINT POUR COUNTRYPAGE - récupère pays + contenu complet
         getCountryWithContent: builder.query({
             query: (id) => `/api/countries/${id}/full`,
             providesTags: (result, error, id) => [
@@ -66,7 +67,7 @@ export const countriesApi = apiSlice.injectEndpoints({
             }),
         }),
 
-        // Recherche de pays par nom
+        // 🔍 RECHERCHE DE PAYS PAR NOM
         searchCountries: builder.query({
             query: (searchTerm) => ({
                 url: '/api/countries/search',
@@ -80,7 +81,7 @@ export const countriesApi = apiSlice.injectEndpoints({
             }),
         }),
 
-        // Pays populaires/recommandés pour la page d'accueil
+        // ⭐ PAYS POPULAIRES/RECOMMANDÉS pour la page d'accueil
         getFeaturedCountries: builder.query({
             query: (limit = 6) => ({
                 url: '/api/countries/featured',

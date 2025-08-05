@@ -1,9 +1,11 @@
-// CreateTopicForm.jsx - Version améliorée pour l'intégration dans CountryForum
+// CreateTopicForm.jsx - Version corrigée avec redirection et sans vidéo
 import React, { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useCreateDiscussionMutation, useUploadMessageImageMutation } from '../../../api/endpoints/forum';
-import { Plus, Eye, EyeOff, Image, Video, Send, X } from 'lucide-react';
+import { Plus, Eye, EyeOff, Image, Send, X } from 'lucide-react';
 
 const CreateTopicForm = ({ countryId, countryName, onSuccess }) => {
+    const navigate = useNavigate();
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [isPreview, setIsPreview] = useState(false);
@@ -32,12 +34,7 @@ const CreateTopicForm = ({ countryId, countryName, onSuccess }) => {
         }
     };
 
-    const handleVideoLink = () => {
-        const videoUrl = prompt('Entrez l\'URL de la vidéo (YouTube, etc.)');
-        if (!videoUrl) return;
-        const videoMarkdown = `\n[Vidéo](${videoUrl})\n`;
-        setContent(prev => prev + videoMarkdown);
-    };
+    // ✅ CORRECTION: Suppression de la fonction handleVideoLink
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -46,16 +43,17 @@ const CreateTopicForm = ({ countryId, countryName, onSuccess }) => {
         setIsSubmitting(true);
 
         try {
-            await createDiscussion({
+            // ✅ CORRECTION: Récupération de la réponse pour redirection
+            const newDiscussion = await createDiscussion({
                 countryId: countryId,
                 title: title,
                 content: content || "Premier message du sujet."
             }).unwrap();
 
-            setTitle('');
-            setContent('');
-            setIsPreview(false);
-            setIsExpanded(false);
+            // ✅ CORRECTION: Redirection vers TopicView
+            navigate(`/topic/${newDiscussion.id}`);
+
+            // Callback pour mise à jour parent si nécessaire
             if (onSuccess) onSuccess();
         } catch (error) {
             console.error('Erreur lors de la création:', error);
@@ -168,17 +166,7 @@ const CreateTopicForm = ({ countryId, countryName, onSuccess }) => {
                             </button>
                         </div>
 
-                        {/* Avertissement */}
-                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                            <p className="text-xs text-orange-800">
-                                <strong>Rappel :</strong> Victime de harcèlement en ligne ?
-                                <span className="text-blue-600 underline cursor-pointer ml-1">
-                                    Découvrez comment réagir
-                                </span>
-                            </p>
-                        </div>
-
-                        {/* Barre d'outils */}
+                        {/* Barre d'outils - ✅ CORRECTION: Suppression du bouton vidéo */}
                         <div className="flex items-center justify-between border-b border-gray-200 pb-3">
                             <div className="flex items-center space-x-2">
                                 <button
@@ -188,15 +176,6 @@ const CreateTopicForm = ({ countryId, countryName, onSuccess }) => {
                                 >
                                     <Image size={16} />
                                     <span>Image</span>
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={handleVideoLink}
-                                    className="flex items-center space-x-1 px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition-colors"
-                                >
-                                    <Video size={16} />
-                                    <span>Vidéo</span>
                                 </button>
                             </div>
 

@@ -60,6 +60,13 @@ const Dashboard = () => {
             badge: unreadCount > 0 ? unreadCount : null
         },
         {
+            title: "Mon profil",
+            description: "Gérer mes informations personnelles",
+            link: "/profile",
+            icon: "👤",
+            color: "#8B5CF6"
+        },
+        {
             title: "Gestion Utilisateurs",
             description: "Administrer comptes, modération et bannissements",
             link: "/user-management",
@@ -90,6 +97,13 @@ const Dashboard = () => {
             link: "/profile",
             icon: "👤",
             color: "#8B5CF6"
+        },
+        {
+            title: "Mes Topics/Questions",
+            description: "Voir et gérer mes discussions",
+            link: "/my-topics",
+            icon: "💬",
+            color: "#10B981"
         },
         {
             title: "Gestion Utilisateurs",

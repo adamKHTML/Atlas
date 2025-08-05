@@ -8,10 +8,9 @@ export const apiSlice = createApi({
         baseUrl: API_URL,
         credentials: 'include',
         prepareHeaders: (headers) => {
-            const token = localStorage.getItem('token');
-            if (token) {
-                headers.set('Authorization', `Bearer ${token}`);
-            }
+
+            headers.set('X-Requested-With', 'XMLHttpRequest');
+            headers.set('Content-Type', 'application/json');
             return headers;
         },
     }),

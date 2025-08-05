@@ -19,31 +19,39 @@ security:
                 check_path: api_login
                 username_path: email
                 password_path: password
-            remember_me:
-                secret: '%env(APP_SECRET)%'
-                lifetime: 2592000 # 30 jours
-                path: '/'
-                name: 'remember_me'
-                httponly: true
-                samesite: 'strict'
             logout:
                 path: app_logout
-
-            # activate different ways to authenticate
-            # https://symfony.com/doc/current/security.html#the-firewall
-
-            # https://symfony.com/doc/current/security/impersonating_user.html
-            # switch_user: true
+            
+            stateless: false
 
     # Easy way to control access for large sections of your site
     # Note: Only the *first* access control that matches will be used
     access_control:
-        # - { path: ^/admin, roles: ROLE_ADMIN }
-        # - { path: ^/profile, roles: ROLE_USER }
+        # Routes publiques (accessibles sans authentification)
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
         - { path: ^/api/login, roles: PUBLIC_ACCESS }
         - { path: ^/api/verify, roles: PUBLIC_ACCESS }
+        - { path: ^/api/csrf-token, roles: PUBLIC_ACCESS }
+        
+        # ✅ Routes publiques pour les pays
+        - { path: ^/api/countries, roles: PUBLIC_ACCESS }
+        - { path: ^/api/countries/search, roles: PUBLIC_ACCESS }
+        - { path: ^/api/countries/featured, roles: PUBLIC_ACCESS }
+        - { path: ^/api/countries/\d+$, roles: PUBLIC_ACCESS }
+        - { path: ^/api/countries/\d+/full, roles: PUBLIC_ACCESS }
+        
+        # Routes admin (nécessitent ROLE_ADMIN)
+        - { path: ^/api/admin, roles: ROLE_ADMIN }
+        
+        # Routes utilisateur (nécessitent ROLE_USER)
+        - { path: ^/api/user, roles: ROLE_USER }
+        - { path: ^/api/profile, roles: ROLE_USER }
+        - { path: ^/api/discussions, roles: ROLE_USER }
+        - { path: ^/api/messages, roles: ROLE_USER }
+        
+        # Routes par défaut (toutes les autres routes API nécessitent une authentification)
         - { path: ^/api, roles: ROLE_USER }
+
 when@test:
     security:
         password_hashers:

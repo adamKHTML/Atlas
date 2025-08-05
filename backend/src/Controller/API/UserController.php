@@ -59,116 +59,86 @@ class UserController extends AbstractController
         return $response;
     }
 
-    /**
-     * 🔒 Connexion sécurisée avec protection CSRF
-     */
-    #[Route('/api/login', name: 'api_login', methods: ['POST'])]
-    public function login(Request $request): JsonResponse
-    {
-        // 🔒 Vérification CSRF
-        $data = json_decode($request->getContent(), true);
-        
-        if (isset($data['_token'])) {
-            if (!$this->isCsrfTokenValid('authenticate', $data['_token'])) {
-                if ($this->logger) {
-                    $this->logger->warning('CSRF token invalid on login', [
-                        'ip' => $request->getClientIp(),
-                        'user_agent' => $request->headers->get('User-Agent'),
-                        'timestamp' => date('Y-m-d H:i:s')
-                    ]);
-                }
-                throw new InvalidCsrfTokenException('Token CSRF invalide');
-            }
-        }
 
-        $user = $this->getUser();
-        
-        if ($user instanceof User) {
-            // 🔒 Log de connexion réussie
-            if ($this->logger) {
-                $this->logger->info('Login success', [
-                    'user_id' => $user->getId(),
-                    'ip' => $request->getClientIp(),
-                    'user_agent' => $request->headers->get('User-Agent'),
-                    'timestamp' => date('Y-m-d H:i:s')
-                ]);
-            }
-            
-            $response = new JsonResponse([
-                'success' => true,
-                'message' => 'Connexion réussie',
-                'user' => [
-                    'id' => $user->getId(),
-                    'email' => $user->getEmail(),
-                    // 🔒 Protection XSS
-                    'pseudo' => htmlspecialchars($user->getPseudo(), ENT_QUOTES, 'UTF-8'),
-                    'firstname' => htmlspecialchars($user->getFirstname(), ENT_QUOTES, 'UTF-8'),
-                    'lastname' => htmlspecialchars($user->getLastname(), ENT_QUOTES, 'UTF-8'),
-                    'roles' => $user->getRoles(),
-                    'isVerified' => $user->isVerified(),
-                    'profilePicture' => $user->getProfilePicture()
-                ]
-            ]);
-            
-            $this->addSecurityHeaders($response);
-            
-            return $response;
-        }
-        
-        // 🔒 Log des tentatives de connexion échouées
+    #[Route('/api/login', name: 'api_login', methods: ['POST'])]
+public function login(Request $request): JsonResponse
+{
+    $user = $this->getUser();
+    
+    if ($user instanceof User) {
+        // 🔒 Log de connexion réussie
         if ($this->logger) {
-            $this->logger->warning('Login failed', [
+            $this->logger->info('Login success', [
+                'user_id' => $user->getId(),
                 'ip' => $request->getClientIp(),
                 'user_agent' => $request->headers->get('User-Agent'),
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
         }
         
-        $response = new JsonResponse(['error' => 'Identifiants invalides'], Response::HTTP_UNAUTHORIZED);
+        $response = new JsonResponse([
+            'success' => true,
+            'message' => 'Connexion réussie',
+            'user' => [
+                'id' => $user->getId(),
+                'email' => $user->getEmail(),
+                // 🔒 Protection XSS
+                'pseudo' => htmlspecialchars($user->getPseudo(), ENT_QUOTES, 'UTF-8'),
+                'firstname' => htmlspecialchars($user->getFirstname(), ENT_QUOTES, 'UTF-8'),
+                'lastname' => htmlspecialchars($user->getLastname(), ENT_QUOTES, 'UTF-8'),
+                'roles' => $user->getRoles(),
+                'isVerified' => $user->isVerified(),
+                'profilePicture' => $user->getProfilePicture()
+            ]
+        ]);
+        
         $this->addSecurityHeaders($response);
         
         return $response;
     }
-
-    /**
-     * 🔒 Déconnexion sécurisée avec protection CSRF
-     */
-    #[Route('/api/logout', name: 'api_logout', methods: ['POST'])]
-    public function logout(Request $request): JsonResponse
-    {
-        // 🔒 Vérification CSRF pour logout
-        $data = json_decode($request->getContent(), true);
-        
-        if (isset($data['_token'])) {
-            if (!$this->isCsrfTokenValid('logout', $data['_token'])) {
-                if ($this->logger) {
-                    $this->logger->warning('CSRF token invalid on logout', [
-                        'ip' => $request->getClientIp(),
-                        'timestamp' => date('Y-m-d H:i:s')
-                    ]);
-                }
-                throw new InvalidCsrfTokenException('Token CSRF invalide');
-            }
-        }
-
-        $user = $this->getUser();
-        
-        if ($user instanceof User) {
-            if ($this->logger) {
-                $this->logger->info('Logout', [
-                    'user_id' => $user->getId(),
-                    'ip' => $request->getClientIp(),
-                    'timestamp' => date('Y-m-d H:i:s')
-                ]);
-            }
-        }
-        
-        $response = new JsonResponse(['message' => 'Déconnexion réussie']);
-        $this->addSecurityHeaders($response);
-        
-        return $response;
+    
+    // 🔒 Log des tentatives de connexion échouées
+    if ($this->logger) {
+        $this->logger->warning('Login failed', [
+            'ip' => $request->getClientIp(),
+            'user_agent' => $request->headers->get('User-Agent'),
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
     }
+    
+    $response = new JsonResponse(['error' => 'Identifiants invalides'], Response::HTTP_UNAUTHORIZED);
+    $this->addSecurityHeaders($response);
+    
+    return $response;
+}
 
+/**
+ * 🔒 Déconnexion avec invalidation session
+ */
+#[Route('/api/logout', name: 'api_logout', methods: ['POST'])]
+public function logout(Request $request): JsonResponse
+{
+    $user = $this->getUser();
+    
+    if ($user instanceof User) {
+        if ($this->logger) {
+            $this->logger->info('Logout', [
+                'user_id' => $user->getId(),
+                'ip' => $request->getClientIp(),
+                'timestamp' => date('Y-m-d H:i:s')
+            ]);
+        }
+    }
+    
+    // 🔒 Invalider la session
+    $request->getSession()->invalidate();
+    
+    $response = new JsonResponse(['message' => 'Déconnexion réussie']);
+    $this->addSecurityHeaders($response);
+    
+    return $response;
+}
+   
     /**
      * 🔒 Endpoint pour générer un token CSRF
      */

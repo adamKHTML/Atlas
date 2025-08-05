@@ -237,27 +237,34 @@ const AnalyticsPage = () => {
                     alignItems: 'center'
                 }}>
                     <button
-                        onClick={handleRefresh}
-                        disabled={isRefreshing}
+                        onClick={() => navigate('/Dashboard')}
                         style={{
                             color: 'white',
-                            background: 'rgba(255,255,255,0.1)',
-                            border: '1px solid rgba(255,255,255,0.2)',
-                            borderRadius: '8px',
-                            padding: '8px 16px',
-                            fontSize: '14px',
+                            background: 'none',
+                            border: '1px dashed white',
+                            borderRadius: '25px',
+                            padding: 'clamp(6px, 2vw, 8px) clamp(12px, 3vw, 16px)',
+                            fontSize: 'clamp(12px, 2.5vw, 14px)',
                             fontWeight: '500',
                             cursor: 'pointer',
-                            transition: 'all 0.2s'
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            whiteSpace: 'nowrap'
                         }}
                         onMouseOver={(e) => {
-                            e.target.style.backgroundColor = 'rgba(255,255,255,0.2)';
+                            e.target.style.backgroundColor = '#F3CB23';
+                            e.target.style.borderColor = '#F3CB23';
+                            e.target.style.color = '#374640';
                         }}
                         onMouseOut={(e) => {
-                            e.target.style.backgroundColor = 'rgba(255,255,255,0.1)';
+                            e.target.style.backgroundColor = 'transparent';
+                            e.target.style.borderColor = 'white';
+                            e.target.style.color = 'white';
                         }}
                     >
-                        🏠 Dashboard
+                        ✦ Dashboard
                     </button>
                 </div>
             </div>

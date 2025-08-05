@@ -1,26 +1,38 @@
 import { apiSlice } from '../apiSlice';
-import { setUser } from '../../store/slices/authSlice';
+import { setUser, clearUser } from '../../store/slices/authSlice';
 
 export const authApi = apiSlice.injectEndpoints({
     endpoints: (builder) => ({
-        // ✅ Connexion SIMPLE sans remember me
+        // 🔒 Login avec JSON (compatible json_login Symfony)
         login: builder.mutation({
             query: (credentials) => ({
                 url: '/api/login',
                 method: 'POST',
+                // 🔥 CORRECTION : Ne pas utiliser JSON.stringify() !
+                // RTK Query sérialise automatiquement l'objet
                 body: {
                     email: credentials.email,
                     password: credentials.password
                 },
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'application/json',  // ← Garder ceci
                     'X-Requested-With': 'XMLHttpRequest'
                 }
             }),
+            onQueryStarted: async (_, { dispatch, queryFulfilled }) => {
+                try {
+                    const { data } = await queryFulfilled;
+                    if (data.success && data.user) {
+                        dispatch(setUser(data.user));
+                    }
+                } catch (err) {
+                    console.error('Erreur login:', err);
+                }
+            },
             invalidatesTags: [{ type: 'Auth', id: 'STATUS' }],
         }),
 
-        // ✅ Déconnexion SIMPLE
+        // 🔒 Déconnexion avec cookies
         logout: builder.mutation({
             query: () => ({
                 url: '/api/logout',
@@ -35,15 +47,15 @@ export const authApi = apiSlice.injectEndpoints({
                 } catch (err) {
                     console.error('Erreur déconnexion:', err);
                 } finally {
-                    // ✅ Nettoyer Redux uniquement (pas de localStorage)
-                    dispatch(setUser(null));
+                    // ✅ Nettoyer Redux
+                    dispatch(clearUser());
                     dispatch(apiSlice.util.resetApiState());
                 }
             },
         }),
 
-        // ✅ getCurrentUser SIMPLE - Le cookie de session est géré automatiquement
-        getCurrentUser: builder.query({
+        // 🔒 Vérification auth au démarrage
+        checkAuth: builder.query({
             query: () => ({
                 url: '/api/me',
                 headers: {
@@ -94,16 +106,13 @@ export const authApi = apiSlice.injectEndpoints({
                 }
             }),
         }),
-
-        // ❌ SUPPRIMÉ : deleteAccount - Maintenant géré par profile.js uniquement
     }),
 });
 
 export const {
     useLoginMutation,
     useLogoutMutation,
-    useGetCurrentUserQuery,
+    useCheckAuthQuery,
     useVerifyEmailQuery,
     useResendVerificationEmailMutation,
-
 } = authApi;
