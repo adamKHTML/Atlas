@@ -1,9 +1,8 @@
-# config/framework.yaml - VERSION CORRIGÉE
 
 framework:
     secret: '%env(APP_SECRET)%'
     
-    # 🔒 Configuration session sécurisée CORRIGÉE
+    # Configuration session sécurisée 
     session:
         handler_id: null
         cookie_secure: auto

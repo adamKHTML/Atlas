@@ -1,0 +1,23 @@
+services:
+  frontend:
+    container_name: atlas_react_frontend_container
+    image: argentikk/atlasreact-deployment
+    ports:
+      - "3002:3000"
+  backend:
+    container_name: atlas_symfony_backend_container
+    image: argentikk/atlasymfony-deployment
+    ports:
+      - "8092:80"
+  db:
+    image: mysql:8.0
+    container_name: atlas_db_container
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: db_atlas
+    ports:
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+volumes:
+  db_data:

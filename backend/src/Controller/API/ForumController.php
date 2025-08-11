@@ -29,10 +29,7 @@ class ForumController extends AbstractController
 
     // =============== DISCUSSIONS ===============
 
-    /**
-     * Get all discussions for a country
-     * Route: GET /api/country/{id}/discussions
-     */
+
     #[Route('/api/country/{id}/discussions', name: 'api_get_country_discussions', methods: ['GET'])]
     public function getCountryDiscussions(int $id, Request $request): JsonResponse
     {
@@ -46,11 +43,11 @@ class ForumController extends AbstractController
             $limit = (int) $request->query->get('limit', 15);
             $offset = ($page - 1) * $limit;
 
-            // ✅ SOLUTION 1: Utiliser findBy simple (sans QueryBuilder)
+            // Utilise findBy simple (sans QueryBuilder)
             $discussions = $this->entityManager->getRepository(Discussion::class)
                 ->findBy(['country' => $country], ['id' => 'DESC'], $limit, $offset);
 
-            // Count total discussions
+            // Compte total discussions
             $totalQuery = $this->entityManager->getRepository(Discussion::class)
                 ->createQueryBuilder('d')
                 ->select('COUNT(d.id)')
@@ -76,7 +73,7 @@ class ForumController extends AbstractController
             $discussionsData = [];
 
             foreach ($discussions as $discussion) {
-                // Get message count for this discussion
+                
                 $messageCountQuery = $this->entityManager->getRepository(Message::class)
                     ->createQueryBuilder('m')
                     ->select('COUNT(m.id)')
@@ -86,7 +83,7 @@ class ForumController extends AbstractController
 
                 $messageCount = $messageCountQuery->getSingleScalarResult();
 
-                // Get latest message with user info (utilise findBy pour éviter le problème)
+                // Récupère dernier message avec l'info utilisateur (utilise findBy pour éviter le problème)
                 $latestMessages = $this->entityManager->getRepository(Message::class)
                     ->findBy(['discussion' => $discussion], ['id' => 'DESC'], 1);
 
@@ -153,8 +150,7 @@ class ForumController extends AbstractController
     }
 
     /**
-     * Create a new discussion
-     * Route: POST /api/country/{id}/discussions
+     * Creer nouvelle discussion
      */
     #[Route('/api/country/{id}/discussions', name: 'api_create_discussion', methods: ['POST'])]
     public function createDiscussion(int $id, Request $request): JsonResponse
@@ -180,7 +176,7 @@ class ForumController extends AbstractController
                 return new JsonResponse(['error' => 'User not authenticated'], 401);
             }
 
-            // Create discussion
+            // créer une discussion
             $discussion = new Discussion();
             $discussion->setCountry($country);
             $discussion->setTitle(trim($data['title']));
@@ -188,7 +184,7 @@ class ForumController extends AbstractController
 
             $this->entityManager->persist($discussion);
 
-            // Create first message
+            // Crér premier message
             $message = new Message();
             $message->setUser($user);
             $message->setDiscussion($discussion);
@@ -227,8 +223,7 @@ class ForumController extends AbstractController
     }
 
     /**
-     * Get single discussion with messages
-     * Route: GET /api/discussions/{id}
+     * Recupère une discussion par ID
      */
     #[Route('/api/discussions/{id}', name: 'api_get_discussion', methods: ['GET'])]
     public function getDiscussion(int $id, Request $request): JsonResponse
@@ -243,11 +238,11 @@ class ForumController extends AbstractController
             $limit = (int) $request->query->get('limit', 20);
             $offset = ($page - 1) * $limit;
 
-            // ✅ Utiliser findBy pour éviter les problèmes de QueryBuilder
+            // findBy pour éviter les problèmes de QueryBuilder
             $messages = $this->entityManager->getRepository(Message::class)
                 ->findBy(['discussion' => $discussion], ['id' => 'ASC'], $limit, $offset);
 
-            // Count total messages
+            
             $totalQuery = $this->entityManager->getRepository(Message::class)
                 ->createQueryBuilder('m')
                 ->select('COUNT(m.id)')
@@ -261,7 +256,7 @@ class ForumController extends AbstractController
             $currentUser = $this->getUser();
 
             foreach ($messages as $message) {
-                // Get likes count
+                //Compteur de like
                 $likesQuery = $this->entityManager->getRepository(Reaction::class)
                     ->createQueryBuilder('r')
                     ->select('COUNT(r.id)')
@@ -272,7 +267,7 @@ class ForumController extends AbstractController
 
                 $likes = $likesQuery->getSingleScalarResult();
 
-                // Get dislikes count
+                // Compteur de dislike
                 $dislikesQuery = $this->entityManager->getRepository(Reaction::class)
                     ->createQueryBuilder('r')
                     ->select('COUNT(r.id)')
@@ -283,7 +278,7 @@ class ForumController extends AbstractController
 
                 $dislikes = $dislikesQuery->getSingleScalarResult();
 
-                // Get user reaction
+                // Qui à like et qui à dislike
                 $userReaction = null;
                 if ($currentUser) {
                     $userReactionQuery = $this->entityManager->getRepository(Reaction::class)
@@ -292,7 +287,7 @@ class ForumController extends AbstractController
                     $userReaction = $userReactionQuery ? $userReactionQuery->isType() : null;
                 }
 
-                // ✅ CORRECTION: Gestion sécurisée de l'utilisateur avec vérification NULL + ajout des rôles
+                //  Au cas ou l'utilisateur est supprimé / vérification NULL + ajout des rôles
                 $messageUser = $message->getUser();
                 $userData = null;
                 
@@ -303,7 +298,7 @@ class ForumController extends AbstractController
                         'profile_picture' => $messageUser->getProfilePicture(),
                         'firstname' => $messageUser->getFirstname(),
                         'lastname' => $messageUser->getLastname(),
-                        'roles' => $messageUser->getRoles() // ✅ AJOUT: Inclure les rôles
+                        'roles' => $messageUser->getRoles() 
                     ];
                 } else {
                     $userData = [
@@ -361,8 +356,7 @@ class ForumController extends AbstractController
     }
 
     /**
-     * Add message to discussion
-     * Route: POST /api/discussions/{id}/messages
+     * Ajouter un message à une discussion
      */
     #[Route('/api/discussions/{id}/messages', name: 'api_add_message', methods: ['POST'])]
     public function addMessage(int $id, Request $request): JsonResponse
@@ -425,14 +419,13 @@ class ForumController extends AbstractController
     }
 
     /**
-     * React to message (like/dislike)
-     * Route: POST /api/messages/{id}/react
+     * Réagir à un message (like/dislike)
      */
     #[Route('/api/messages/{id}/react', name: 'api_react_to_message', methods: ['POST'])]
     public function reactToMessage(int $id, Request $request): JsonResponse
     {
         try {
-            // ✅ CORRECTION: Vérification robuste de l'existence du message
+            // Vérification  de l'existence du message
             $message = $this->entityManager->getRepository(Message::class)->find($id);
             if (!$message) {
                 error_log("Message with ID {$id} not found");
@@ -452,7 +445,7 @@ class ForumController extends AbstractController
 
             error_log("ReactToMessage: User {$user->getId()} wants to " . ($data['type'] ? 'like' : 'dislike') . " message {$id}");
 
-            // ✅ CORRECTION: Gestion améliorée des réactions
+            //  Gestion améliorée des réactions
             $existingReaction = $this->entityManager->getRepository(Reaction::class)
                 ->findOneBy(['message' => $message, 'user' => $user]);
 
@@ -460,18 +453,18 @@ class ForumController extends AbstractController
 
             if ($existingReaction) {
                 if ($existingReaction->isType() === $data['type']) {
-                    // Same reaction - remove it
+                    // Si même réaction, on la supprime
                     $this->entityManager->remove($existingReaction);
                     $userReaction = null;
                     error_log("Removed existing reaction for user {$user->getId()} on message {$id}");
                 } else {
-                    // Different reaction - update it
+                    // Si réaction différente, on met à jour
                     $existingReaction->setType($data['type']);
                     $userReaction = $data['type'];
                     error_log("Updated reaction for user {$user->getId()} on message {$id} to " . ($data['type'] ? 'like' : 'dislike'));
                 }
             } else {
-                // Create new reaction
+                // Créer une nouvelle réaction
                 $reaction = new Reaction();
                 $reaction->setMessage($message);
                 $reaction->setUser($user);
@@ -481,7 +474,7 @@ class ForumController extends AbstractController
                 error_log("Created new reaction for user {$user->getId()} on message {$id}: " . ($data['type'] ? 'like' : 'dislike'));
             }
 
-            // ✅ CORRECTION: Transaction sécurisée avec gestion d'erreur
+            //  Transaction sécurisée avec gestion d'erreur
             try {
                 $this->entityManager->flush();
                 error_log("Reaction successfully saved to database");
@@ -493,7 +486,7 @@ class ForumController extends AbstractController
                 ], 500);
             }
 
-            // Return updated counts
+            // Retourne les compteurs mis à jour
             $likesQuery = $this->entityManager->getRepository(Reaction::class)
                 ->createQueryBuilder('r')
                 ->select('COUNT(r.id)')
@@ -540,8 +533,7 @@ class ForumController extends AbstractController
     }
 
     /**
-     * Remove reaction from message
-     * Route: DELETE /api/messages/{id}/unreact
+     * Supprimer une réaction à un message
      */
     #[Route('/api/messages/{id}/unreact', name: 'api_unreact_to_message', methods: ['DELETE'])]
     public function unreactToMessage(int $id): JsonResponse
@@ -565,7 +557,7 @@ class ForumController extends AbstractController
                 $this->entityManager->flush();
             }
 
-            // Return updated counts
+            // Retourne les compteurs mis à jour
             $likesQuery = $this->entityManager->getRepository(Reaction::class)
                 ->createQueryBuilder('r')
                 ->select('COUNT(r.id)')
@@ -604,8 +596,7 @@ class ForumController extends AbstractController
     }
 
     /**
-     * Upload image for message
-     * Route: POST /api/messages/upload-image
+     * Uploader une image pour un message
      */
     #[Route('/api/messages/upload-image', name: 'api_upload_message_image', methods: ['POST'])]
     public function uploadMessageImage(Request $request): JsonResponse
@@ -636,7 +627,7 @@ class ForumController extends AbstractController
             $safeFilename = $this->slugger->slug($originalFilename);
             $newFilename = $safeFilename . '-' . uniqid() . '.' . $uploadedFile->guessExtension();
 
-            // Assurez-vous que le dossier existe
+            // S'assure que le dossier existe
             $uploadDir = $this->getParameter('kernel.project_dir') . '/public/uploads/messages';
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0777, true);

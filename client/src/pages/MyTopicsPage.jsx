@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { selectUser } from '../store/slices/authSlice';
-import { useGetUserStatsQuery, useGetUserDiscussionsQuery, useGetUserMessagesQuery } from '../api/endpoints/userStats';
+import { useGetUserStatsQuery, useGetUserDiscussionsQuery, useGetUserMessagesQuery } from '../api/endpoints/userstats.js';
 
 const MyTopicsPage = () => {
     const navigate = useNavigate();

@@ -25,7 +25,7 @@ class NotificationController extends AbstractController
     }
 
     /**
-     * GET /api/notifications - Récupérer les messages de l'utilisateur
+     *  Récupère les messages de l'utilisateur
      */
     #[Route('/notifications', name: 'api_get_user_notifications', methods: ['GET'])]
     #[IsGranted('ROLE_USER')]
@@ -39,7 +39,7 @@ class NotificationController extends AbstractController
             $limit = min(100, max(5, (int) $request->query->get('limit', 100)));
             $offset = ($page - 1) * $limit;
 
-            // Récupérer TOUTES les notifications impliquant l'utilisateur
+            // Récupère TOUTES les notifications impliquant l'utilisateur
             $qb = $this->entityManager->getRepository(Notification::class)->createQueryBuilder('n');
             
             $notifications = $qb
@@ -111,7 +111,7 @@ class NotificationController extends AbstractController
     }
 
     /**
-     * POST /api/notifications - Créer une nouvelle notification
+     *  Créer une nouvelle notification
      */
     #[Route('/notifications', name: 'api_create_notification', methods: ['POST'])]
     #[IsGranted('ROLE_USER')]
@@ -206,7 +206,7 @@ class NotificationController extends AbstractController
                 return new JsonResponse(['error' => 'Type de notification non valide'], 400);
             }
 
-            // Créer la notification
+            // Crée la notification
             $notification = new Notification();
             $notification->setUser($recipient);
             $notification->setTypeNotification($type);
@@ -319,7 +319,7 @@ class NotificationController extends AbstractController
                 return new JsonResponse(['error' => 'Notification non trouvée'], 404);
             }
 
-            // Vérifier les permissions
+            // Vérifie les permissions
             if ($notification->getUser()->getId() !== $user->getId()) {
                 return new JsonResponse(['error' => 'Accès non autorisé'], 403);
             }
@@ -352,7 +352,7 @@ class NotificationController extends AbstractController
                 return new JsonResponse(['error' => 'Notification non trouvée'], 404);
             }
 
-            // Vérifier les permissions
+            // Vérifie les permissions
             if ($notification->getUser()->getId() !== $user->getId() && 
                 !$this->isGranted('ROLE_ADMIN')) {
                 return new JsonResponse(['error' => 'Accès non autorisé'], 403);
@@ -372,7 +372,7 @@ class NotificationController extends AbstractController
     }
 
     /**
-     * GET /api/notifications/users/list - Liste des utilisateurs VÉRIFIÉS pour le select
+     * Liste des utilisateurs VÉRIFIÉS pour le select
      */
     #[Route('/notifications/users/list', name: 'api_get_users_list', methods: ['GET'])]
     #[IsGranted('ROLE_USER')]
@@ -382,13 +382,13 @@ class NotificationController extends AbstractController
             $currentUser = $this->getUser();
             $search = $this->sanitizeInput($request->query->get('search', ''));
             
-            // Créer la requête
+            // Crée la requête
             $qb = $this->entityManager->getRepository(User::class)->createQueryBuilder('u')
                 ->where('u.isVerified = true')
                 ->andWhere('u.id != :currentUserId')
                 ->setParameter('currentUserId', $currentUser->getId());
 
-            // Ajouter la recherche si fournie
+            // Ajoute la recherche si fournie
             if (!empty($search)) {
                 $qb->andWhere(
                     $qb->expr()->orX(
@@ -427,7 +427,7 @@ class NotificationController extends AbstractController
     }
 
     /**
-     * GET /api/notifications/unread-count - Nombre de notifications non lues
+     *  Nombre de notifications non lues
      */
     #[Route('/notifications/unread-count', name: 'api_get_unread_count', methods: ['GET'])]
     #[IsGranted('ROLE_USER')]
@@ -461,7 +461,7 @@ class NotificationController extends AbstractController
     }
 
     /**
-     * Méthodes utilitaires privées
+     * Méthodes utilitaires
      */
     private function formatDate(\DateTimeImmutable $date): string
     {
@@ -497,12 +497,12 @@ class NotificationController extends AbstractController
      */
     private function sanitizeInput(string $input): string
     {
-        // Nettoyer l'entrée
+        // Nettoie l'entrée pour éviter les injections XSS
         $input = trim($input);
         $input = stripslashes($input);
         $input = htmlspecialchars($input, ENT_QUOTES, 'UTF-8');
         
-        // Supprimer les balises HTML potentiellement dangereuses
+        // Supprime les balises HTML potentiellement dangereuses
         $input = strip_tags($input);
         
         return $input;

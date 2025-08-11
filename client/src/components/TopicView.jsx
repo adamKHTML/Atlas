@@ -102,7 +102,7 @@ const TopicView = () => {
         return date.toLocaleDateString('fr-FR', options);
     };
 
-    // ✅ CORRECTION: Gestion des vrais rôles utilisateur
+    // Indentification des rôles utilisateur
     const getUserRoleInfo = (messageUser) => {
         if (!messageUser || !messageUser.pseudo) {
             return {
@@ -112,15 +112,11 @@ const TopicView = () => {
                 icon: User,
                 messageCount: 0
             };
-        }
-
-        // Calculer le nombre réel de messages pour cet utilisateur
+        }     
         const userMessages = messages.filter(m => m.user?.id === messageUser.id);
         const realMessageCount = userMessages.length;
-
-        // Déterminer le rôle basé sur les vraies données de la base
         const roles = messageUser.roles || [];
-
+        
         if (roles.includes('ROLE_ADMIN')) {
             return {
                 name: "Administrateur",
@@ -178,7 +174,7 @@ const TopicView = () => {
         setNewMessage('');
     };
 
-    // ✅ CORRECTION: Gestion des réactions avec validation
+
     const handleReaction = async (messageId, type) => {
         if (!isAuthenticated || !messageId) return;
 

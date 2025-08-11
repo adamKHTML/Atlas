@@ -16,8 +16,8 @@ use Psr\Log\LoggerInterface;
 
 class RegisterController extends AbstractController
 {
-    // Constantes de sécurité
-    private const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+    
+    private const MAX_FILE_SIZE = 2 * 1024 * 1024; 
     private const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     
     public function __construct(
@@ -61,7 +61,7 @@ class RegisterController extends AbstractController
             return $this->jsonResponse(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
 
-        // 3. Validation de la photo de profil
+        // Validation de la photo de profil
         if ($profilePicture) {
             try {
                 $this->validateProfilePicture($profilePicture);
@@ -155,12 +155,12 @@ class RegisterController extends AbstractController
             $errors[] = 'Email invalide';
         }
 
-        // Validation pseudo (sécurisé)
+        // Validation pseudo 
         if (!isset($data['pseudo']) || !preg_match('/^[a-zA-Z0-9_-]{3,30}$/', $data['pseudo'])) {
             $errors[] = 'Le pseudo doit contenir 3-30 caractères (lettres, chiffres, - et _ uniquement)';
         }
 
-        // Validation noms
+        // Validation noms et prenoms
         if (!isset($data['firstname']) || !preg_match('/^[a-zA-ZÀ-ÿ\s\'-]{1,50}$/u', $data['firstname'])) {
             $errors[] = 'Prénom invalide';
         }
@@ -178,7 +178,7 @@ class RegisterController extends AbstractController
             throw new \InvalidArgumentException(implode(', ', $errors));
         }
 
-        // Sanitisation
+        
         return [
             'email' => filter_var(trim($data['email']), FILTER_SANITIZE_EMAIL),
             'pseudo' => htmlspecialchars(trim($data['pseudo']), ENT_QUOTES, 'UTF-8'),

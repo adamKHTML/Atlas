@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useRegisterMutation } from '../../api/endpoints/register';
-import GDPRModal from '../../components/GDPRModal';
+import GDPRModal from '../../components/GdprModal.jsx';
 
 export const RegisterForm = () => {
     const [formData, setFormData] = useState({

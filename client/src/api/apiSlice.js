@@ -12,12 +12,12 @@ export const apiSlice = createApi({
         prepareHeaders: (headers, { getState, endpoint, type, extra }) => {
             headers.set('X-Requested-With', 'XMLHttpRequest');
 
-            // 🔥 EXCEPTION SPÉCIALE pour createCountry
-            if (endpoint === 'createCountry') {
+            if (endpoint === 'createCountry' || endpoint === 'register') {
                 headers.delete('Content-Type'); // Laisser le navigateur gérer
-                console.log('🔧 Content-Type supprimé pour createCountry');
+                console.log(`🔧 Content-Type supprimé pour ${endpoint}`);
                 return headers;
             }
+
 
             // Pour tous les autres endpoints
             const isUploadEndpoint = /upload|picture|file|image/i.test(endpoint || '');

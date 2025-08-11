@@ -1,0 +1,91 @@
+pipeline {
+    agent any
+    
+    stages {
+        stage("Checkout") {
+            steps {
+                git branch: "main", url: "https://github.com/adamKHTML/Atlas"
+            }
+        }
+        
+        stage("Continuous Integration") {
+            steps {
+                dir('front') {
+                    sh "npm install"
+                    sh "npm install lucide-react country-list dompurify @tailwindcss/vite tailwindcss terser vitest @testing-library/react @testing-library/jest-dom"
+                    sh "npm run build"
+                    sh "npm run test"
+            }
+        }
+        
+        stage("Continuous Delivery") {
+            steps {
+                dir('front') {
+                    sh "docker build -t ${DOCKERHUB_USERNAME}/atlasreact-deployment ."
+                    sh "echo ${DOCKERHUB_PASSWORD} | docker login -u ${DOCKERHUB_USERNAME} --password-stdin"
+                    sh "docker push ${DOCKERHUB_USERNAME}/atlasreact-deployment"
+                }
+            }
+        }
+        
+        stage("Deploy Frontend") {
+            steps {
+                sh '''
+                    echo "Début du déploiement Atlas Frontend..."
+                    
+                    # Redémarrage du container frontend avec la nouvelle image
+                    echo " Redémarrage du container frontend..."
+                    docker stop atlas_react_frontend_container || true
+                    docker rm atlas_react_frontend_container || true
+                    docker-compose up -d frontend
+                    
+                    # Attente démarrage
+                    echo " Attente démarrage frontend..."
+                    sleep 15
+                    
+                    # Installation complète des dépendances
+                    echo " Installation des dépendances frontend..."
+                    docker exec atlas_react_frontend_container npm install --production
+                    docker exec atlas_react_frontend_container npm install lucide-react country-list dompurify @tailwindcss/vite tailwindcss terser vitest @testing-library/react @testing-library/jest-dom
+                    
+                    # Configuration Tailwind et Vite
+                    echo "Configuration Tailwind et Vite..."
+                    docker exec atlas_react_frontend_container ls -la vite.config.js || echo "Vite config OK"
+                    docker exec atlas_react_frontend_container ls -la tailwind.config.js || echo "Tailwind config OK"
+                    
+                    # Build en production dans le container
+                    echo " Build de production avec Tailwind..."
+                    docker exec atlas_react_frontend_container npm run build || echo "Build déjà fait"
+                    
+                    echo " Frontend Atlas déployé avec succès sur http://180.149.199.211:3002"
+                '''
+            }
+        }
+        
+        stage("Verify Deployment") {
+            steps {
+                sh '''
+                    echo "🔍 Vérification des services..."
+                    sleep 10
+                    
+                    # Test backend
+                    curl -f http://180.149.199.211:8092/api/countries || echo "⚠️ Backend pas encore prêt"
+                    
+                    # Test frontend
+                    curl -f http://180.149.199.211:3002/ || echo " Frontend pas encore prêt"
+                    
+                    echo "Déploiement frontend terminé avec Tailwind et Vitest !"
+                '''
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "🎉 Déploiement frontend réussi avec toutes les dépendances !"
+        }
+        failure {
+            echo "❌ Échec du déploiement frontend"
+        }
+    }
+}

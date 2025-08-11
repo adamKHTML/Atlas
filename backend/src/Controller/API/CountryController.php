@@ -38,18 +38,16 @@ class CountryController extends AbstractController
         $this->logger = $logger;
     }
 
-    // ==========================================
-    // 📌 MÉTHODES DE SÉRIALISATION CORRIGÉES
-    // ==========================================
+   
 
     /**
-     * 🔧 Sérialisation basique - SANS encodage HTML (le frontend s'en charge)
+     * Sérialisation basique - SANS encodage HTML (le frontend s'en charge)
      */
     private function serializeCountryBasic(Country $country): array
     {
         return [
             'id' => $country->getId(),
-            'name' => $country->getName(), // ✅ Pas d'encodage HTML ici
+            'name' => $country->getName(), 
             'code' => $country->getCode(),
             'flag_url' => $country->getFlagUrl(),
             'description' => substr($country->getDescription() ?? '', 0, 150) . '...'
@@ -57,16 +55,16 @@ class CountryController extends AbstractController
     }
 
     /**
-     * 🔧 Sérialisation détaillée - SANS encodage HTML 
+     *  Sérialisation détaillée - SANS encodage HTML 
      */
     private function serializeCountryDetailed(Country $country): array
     {
         return [
             'id' => $country->getId(),
-            'name' => $country->getName(), // ✅ Texte brut
+            'name' => $country->getName(), 
             'code' => $country->getCode(),
             'flag_url' => $country->getFlagUrl(),
-            'description' => $country->getDescription(), // ✅ Texte brut
+            'description' => $country->getDescription(), 
             'country_image' => $country->getCountryImage(),
             'created_at' => $country->getCreatedAt()->format('Y-m-d H:i:s'),
             'updated_at' => $country->getUpdatedAt()->format('Y-m-d H:i:s')
@@ -80,10 +78,10 @@ class CountryController extends AbstractController
     {
         return [
             'id' => $country->getId(),
-            'name' => $country->getName(), // ✅ Texte brut
+            'name' => $country->getName(),
             'code' => $country->getCode(),
             'flag_url' => $country->getFlagUrl(),
-            'description' => $country->getDescription(), // ✅ Texte brut
+            'description' => $country->getDescription(), 
             'country_image' => $country->getCountryImage(),
             'created_at' => $country->getCreatedAt()->format('Y-m-d H:i:s'),
             'updated_at' => $country->getUpdatedAt()->format('Y-m-d H:i:s'),
@@ -92,7 +90,7 @@ class CountryController extends AbstractController
     }
 
     /**
-     * 🔧 Sérialisation avec images - SANS encodage HTML
+     * Sérialisation avec images - SANS encodage HTML
      */
     private function serializeCountryWithImages(Country $country, array $contents = []): array
     {
@@ -100,7 +98,7 @@ class CountryController extends AbstractController
         $imageUrl = $country->getCountryImage();
         
         if (!$imageUrl) {
-            // Chercher une image dans le contenu
+            // Cherche une image dans le contenu
             foreach ($contents as $content) {
                 if ($content->getType() === 'image' && $content->getSection()) {
                     $imageUrl = $content->getSection();
@@ -116,10 +114,10 @@ class CountryController extends AbstractController
 
         return [
             'id' => $country->getId(),
-            'name' => $country->getName(), // ✅ Texte brut
+            'name' => $country->getName(), 
             'code' => $country->getCode(),
             'flag_url' => $country->getFlagUrl(),
-            'description' => $country->getDescription(), // ✅ Texte brut
+            'description' => $country->getDescription(), 
             'country_image' => $country->getCountryImage(),
             'image_url' => $imageUrl,
             'created_at' => $country->getCreatedAt()->format('Y-m-d H:i:s'),
@@ -129,13 +127,13 @@ class CountryController extends AbstractController
     }
 
     /**
-     * 🔧 Sérialisation du contenu - SANS encodage HTML
+     *  Sérialisation du contenu - SANS encodage HTML
      */
     private function serializeContent(Content $content): array
     {
         $baseData = [
             'id' => $content->getId(),
-            'title' => $content->getTitle(), // ✅ Texte brut
+            'title' => $content->getTitle(), 
             'type' => $content->getType(),
             'created_at' => $content->getCreatedAt()->format('Y-m-d H:i:s'),
             'updated_at' => $content->getUpdatedAt()->format('Y-m-d H:i:s')
@@ -153,10 +151,7 @@ class CountryController extends AbstractController
         return $baseData;
     }
 
-    // ==========================================
-    // 🔒 MÉTHODES DE SÉCURISATION AMÉLIORÉES
-    // ==========================================
-
+  
     /**
      * Sanitise et valide un paramètre entier
      */
@@ -180,7 +175,7 @@ class CountryController extends AbstractController
     }
 
     /**
-     * 🔧 Sanitise un terme de recherche - VERSION AMÉLIORÉE
+     *  Sanitise un terme de recherche - VERSION AMÉLIORÉE
      */
     private function sanitizeSearchTerm(string $term): string
     {
@@ -195,7 +190,7 @@ class CountryController extends AbstractController
     }
 
     // ==========================================
-    // 📌 ENDPOINTS PUBLICS SÉCURISÉS
+    //  ENDPOINTS PUBLICS SÉCURISÉS
     // ==========================================
 
   
@@ -203,16 +198,16 @@ class CountryController extends AbstractController
 public function getAllCountries(Request $request): JsonResponse
 {
     try {
-        // 🔍 DEBUG : Log de chaque requête GET
+        // Log de chaque requête GET
         if ($this->logger) {
-            $this->logger->info('📋 Requête GET /api/countries reçue', [
+            $this->logger->info(' Requête GET /api/countries reçue', [
                 'params' => $request->query->all(),
                 'timestamp' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
                 'ip' => $request->getClientIp()
             ]);
         }
 
-        // ... votre code existant ...
+        
         $page = $this->sanitizeIntParam($request->query->get('page', '1'), 1, 1, 100);
         $limit = $this->sanitizeIntParam($request->query->get('limit', '12'), 12, 1, 50);
         $withImages = $this->sanitizeBoolParam($request->query->get('with_images', 'false'));
@@ -233,7 +228,7 @@ public function getAllCountries(Request $request): JsonResponse
         
         $total = $this->countryRepository->count([]);
 
-        // 🔍 DEBUG : Log du résultat
+        //  Log du résultat
         if ($this->logger) {
             $this->logger->info('📊 Résultat requête countries:', [
                 'total_in_db' => $total,
@@ -264,7 +259,7 @@ public function getAllCountries(Request $request): JsonResponse
                 'total' => $total,
                 'pages' => ceil($total / $limit)
             ],
-            // 🔍 DEBUG INFO dans la réponse
+            // DEBUG INFO dans la réponse
             'debug_info' => [
                 'timestamp' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
                 'fresh_from_db' => true,
@@ -297,7 +292,7 @@ public function getAllCountries(Request $request): JsonResponse
     #[Route('/api/countries/{id}', name: 'api_country_details', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getCountryById(int $id, Request $request): JsonResponse
     {
-        // 🔒 VALIDATION DE L'ID
+        // VALIDATION DE L'ID
         if ($id <= 0 || $id > 999999) {
             return new JsonResponse(['error' => 'ID invalide'], Response::HTTP_BAD_REQUEST);
         }
@@ -309,7 +304,7 @@ public function getAllCountries(Request $request): JsonResponse
                 return new JsonResponse(['error' => 'Pays introuvable'], Response::HTTP_NOT_FOUND);
             }
 
-            // 🔒 CACHE HEADERS
+            //  CACHE HEADERS
             $response = new JsonResponse($this->serializeCountryDetailed($country));
             $response->setMaxAge(600); // 10 minutes de cache
             $response->setPublic();
@@ -334,7 +329,7 @@ public function getAllCountries(Request $request): JsonResponse
     #[Route('/api/countries/{id}/full', name: 'api_country_full', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getCountryWithContent(int $id, Request $request): JsonResponse
     {
-        // 🔒 VALIDATION DE L'ID
+        // VALIDATION DE L'ID
         if ($id <= 0 || $id > 999999) {
             return new JsonResponse(['error' => 'ID invalide'], Response::HTTP_BAD_REQUEST);
         }
@@ -351,7 +346,7 @@ public function getAllCountries(Request $request): JsonResponse
             $countryData = $this->serializeCountryDetailed($country);
             $countryData['sections'] = array_map([$this, 'serializeContent'], $contents);
 
-            // 🔒 CACHE HEADERS
+            //  CACHE HEADERS
             $response = new JsonResponse($countryData);
             $response->setMaxAge(300); // 5 minutes de cache
             $response->setPublic();
@@ -388,14 +383,14 @@ public function getAllCountries(Request $request): JsonResponse
                 ]);
             }
 
-            // 🔒 LIMITATION DE LA LONGUEUR DE RECHERCHE
+            //  LIMITATION DE LA LONGUEUR DE RECHERCHE
             if (strlen($searchTerm) > 100) {
                 return new JsonResponse([
                     'error' => 'Terme de recherche trop long (max 100 caractères)'
                 ], Response::HTTP_BAD_REQUEST);
             }
 
-            // 🔒 REQUÊTE SÉCURISÉE AVEC LIMITATION
+            //  REQUÊTE SÉCURISÉE AVEC LIMITATION
             $qb = $this->countryRepository->createQueryBuilder('c')
                 ->where('c.name LIKE :search OR c.description LIKE :search')
                 ->setParameter('search', '%' . $searchTerm . '%')
@@ -440,10 +435,10 @@ public function getAllCountries(Request $request): JsonResponse
     public function getFeaturedCountries(Request $request): JsonResponse
     {
         try {
-            // 🔒 VALIDATION ET LIMITATION DU PARAMÈTRE LIMIT
+            //  VALIDATION ET LIMITATION DU PARAMÈTRE LIMIT
             $limit = $this->sanitizeIntParam($request->query->get('limit', '6'), 6, 1, 20);
 
-            // 🔒 REQUÊTE OPTIMISÉE
+            //  REQUÊTE OPTIMISÉE
             $qb = $this->countryRepository->createQueryBuilder('c')
                 ->orderBy('c.created_at', 'DESC')
                 ->setMaxResults($limit);
@@ -456,11 +451,11 @@ public function getAllCountries(Request $request): JsonResponse
                 $countriesData[] = $this->serializeCountryWithImages($country, $contents);
             }
 
-            // 🔒 CACHE HEADERS LONG (car contenu peu changeant)
+            //  CACHE HEADERS LONG (car contenu peu changeant)
             $response = new JsonResponse([
                 'countries' => $countriesData
             ]);
-            $response->setMaxAge(900); // 15 minutes de cache
+            $response->setMaxAge(900); 
             $response->setPublic();
 
             return $response;
@@ -480,7 +475,7 @@ public function getAllCountries(Request $request): JsonResponse
     }
 
     // ==========================================
-    // 📌 ENDPOINTS ADMIN PROTÉGÉS
+    //  ENDPOINTS ADMIN PROTÉGÉS
     // ==========================================
 
     #[Route('/api/admin/countries', name: 'api_admin_countries_list', methods: ['GET'])]
@@ -552,7 +547,7 @@ public function getAllCountries(Request $request): JsonResponse
     #[IsGranted('ROLE_ADMIN')]
     public function createCountry(Request $request): JsonResponse
     {
-        // 🔍 DEBUG TEMPORAIRE - À supprimer après correction
+       
     if ($this->logger) {
         $this->logger->info('🔍 DEBUG Création pays - Données reçues:', [
             'content_type' => $request->headers->get('Content-Type'),
@@ -569,7 +564,7 @@ public function getAllCountries(Request $request): JsonResponse
     $description = $request->request->get('description');
     $countryImageFile = $request->files->get('country_image');
 
-    // 🔍 DEBUG TEMPORAIRE - Vérifier les données reçues
+    // Vérifie les données reçues
     if ($this->logger) {
         $this->logger->info('🔍 DEBUG Données extraites:', [
             'name' => $name,
@@ -707,7 +702,7 @@ public function updateCountry(int $id, Request $request): JsonResponse
     }
 
     try {
-        // 🔍 DEBUG : État AVANT modification
+        //  État AVANT modification
         $allCountriesBefore = $this->countryRepository->findAll();
         $country = $this->countryRepository->find($id);
 
@@ -738,7 +733,7 @@ public function updateCountry(int $id, Request $request): JsonResponse
             $description = $request->request->get('description');
             $countryImageFile = $request->files->get('country_image');
         } else {
-            // JSON classique
+            
             $data = json_decode($request->getContent(), true);
             if (!$data) {
                 return new JsonResponse(['error' => 'Données JSON invalides'], Response::HTTP_BAD_REQUEST);
@@ -804,9 +799,9 @@ public function updateCountry(int $id, Request $request): JsonResponse
 
         $this->entityManager->flush();
 
-        // 🔍 DEBUG : État APRÈS modification
+        // État APRÈS modification
         $allCountriesAfter = $this->countryRepository->findAll();
-        $updatedCountry = $this->countryRepository->find($id); // Recharger depuis la DB
+        $updatedCountry = $this->countryRepository->find($id); 
 
         if ($this->logger) {
             $this->logger->info('✅ APRÈS modification pays:', [
@@ -820,7 +815,7 @@ public function updateCountry(int $id, Request $request): JsonResponse
             ]);
         }
 
-        // 🚀 RÉPONSE ENRICHIE avec état de la base
+        //  RÉPONSE ENRICHIE avec état de la base
         $response = $this->serializeCountryAdmin($updatedCountry);
         $response['debug_info'] = [
             'modification_timestamp' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
@@ -859,7 +854,7 @@ public function deleteCountry(int $id, Request $request): JsonResponse
     }
 
     try {
-        // 🔍 DEBUG : Vérifier les pays AVANT suppression
+        //  Vérifier les pays AVANT suppression
         $allCountriesBefore = $this->countryRepository->findAll();
         if ($this->logger) {
             $this->logger->info('🔍 AVANT suppression - Pays en base:', [
@@ -885,7 +880,7 @@ public function deleteCountry(int $id, Request $request): JsonResponse
         $contentCount = $this->contentRepository->count(['country' => $country]);
         
         if ($contentCount > 0) {
-            // Supprimer d'abord tout le contenu associé
+            
             $contents = $this->contentRepository->findBy(['country' => $country]);
             foreach ($contents as $content) {
                 $this->entityManager->remove($content);
@@ -922,7 +917,7 @@ public function deleteCountry(int $id, Request $request): JsonResponse
             'deleted_country' => $countryName,
             'deleted_content_count' => $contentCount,
             'deleted_country_id' => $id,
-            // 🔍 INFO DE DEBUG
+            
             'debug_info' => [
                 'countries_before_delete' => count($allCountriesBefore),
                 'countries_after_delete' => count($allCountriesAfter),
@@ -1164,7 +1159,7 @@ public function updateCountryContent(int $id, Request $request): JsonResponse
     // ==========================================
 
     /**
-     * 📁 Gestion d'upload d'images avec sécurité renforcée
+     * estion d'upload d'images avec sécurité renforcée
      */
     private function handleImageUpload($file, string $subfolder): ?string
     {
@@ -1199,17 +1194,17 @@ public function updateCountryContent(int $id, Request $request): JsonResponse
             $projectDir = $this->getParameter('kernel.project_dir');
             $uploadsDirectory = $projectDir . '/public/uploads/' . $subfolder;
             
-            // 🔒 CRÉATION DU DOSSIER AVEC PERMISSIONS SÉCURISÉES
+            // 🔒CRÉATION DU DOSSIER AVEC PERMISSIONS SÉCURISÉES
             if (!is_dir($uploadsDirectory)) {
                 mkdir($uploadsDirectory, 0755, true);
             }
 
-            // 🔒 GÉNÉRATION D'UN NOM DE FICHIER SÉCURISÉ
+            // GÉNÉRATION D'UN NOM DE FICHIER SÉCURISÉ
             $originalFilename = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
             $safeFilename = $this->slugger->slug($originalFilename);
             $newFilename = $safeFilename . '-' . uniqid() . '.' . $file->guessExtension();
 
-            // 🔒 VÉRIFICATION FINALE DE L'EXTENSION
+            //  VÉRIFICATION FINALE DE L'EXTENSION
             $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
             $fileExtension = strtolower($file->guessExtension());
             if (!in_array($fileExtension, $allowedExtensions)) {
@@ -1222,7 +1217,7 @@ public function updateCountryContent(int $id, Request $request): JsonResponse
                 return null;
             }
 
-            // 🔒 DÉPLACEMENT DU FICHIER
+            // DÉPLACEMENT DU FICHIER
             $file->move($uploadsDirectory, $newFilename);
 
             return '/uploads/' . $subfolder . '/' . $newFilename;
