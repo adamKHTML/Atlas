@@ -7,13 +7,13 @@
 ```bash
 # 1. Build des images
 docker build . -t argentikk/atlasymfony-deployment
-docker build ./front -t argentikk/atlasreact-deployment
+docker build . -t argentikk/atlasreact-deployment
 
 # 2. Push vers DockerHub
 docker push argentikk/atlasymfony-deployment
 docker push argentikk/atlasreact-deployment
 
-# 3. Déploiement local
+# 3. Déploiement 
 docker-compose up -d
 
 # 4. Configuration post-déploiement
@@ -147,3 +147,30 @@ Serveur : VPS Linux "LWS" + Docker Compose
 Frontend : http://180.149.199.211:3002
 Backend API : http://180.149.199.211:8092/
 Base de données : MySQL (port 3306 interne)
+
+
+## 📋 Plan de Tests - Projet Atlas
+
+| Type de Test | Niveau | Outils | Composants Testés | Objectifs |
+|--------------|--------|--------|-------------------|-----------|
+| **Tests Unitaires Backend** | Composant | PHPUnit + TestCase | • UserController (authentification)<br>• UserRepository (accès données)<br>• Logique métier<br>• Aspects sécuritaires | Valider chaque composant serveur individuellement |
+| **Tests Unitaires Frontend** | Composant | Vitest + React Testing Library | • Composants React<br>• authSlice (Redux)<br>• Dashboard (interface)<br>• Gestion des rôles utilisateur | Assurer le bon fonctionnement de l'interface |
+| **Tests d'Intégration** | Système | PHPUnit + Vitest | • Communication API/Frontend<br>• Cohérence globale<br>• Interaction entre couches | Valider la communication entre composants |
+
+### 🔧 Environnement de Tests
+
+| Environnement | Configuration | Utilisation |
+|---------------|---------------|-------------|
+| **Backend Test** | • PHPUnit avec mocks<br>• Base de données test<br>• Isolation des dépendances | Tests unitaires et intégration backend |
+| **Frontend Test** | • Vitest + JSDOM<br>• Stores Redux de test<br>• Environnement contrôlé | Tests composants React |
+| **Intégration** | • API de test<br>• Données simulées<br>• Environnement complet | Tests bout en bout |
+
+### ✅ Couverture des Tests
+
+| Fonctionnalité | Backend | Frontend | Intégration | Statut |
+|----------------|---------|----------|-------------|--------|
+| Authentification JWT | ✅ | ✅ | ✅ | Validé |
+| Gestion des rôles | ✅ | ✅ | ✅ | Validé |
+| CRUD Pays | ✅ | ✅ | ⏳ | En cours |
+| Upload fichiers | ✅ | ⏳ | ⏳ | En cours |
+| API REST | ✅ | ✅ | ✅ | Validé |
