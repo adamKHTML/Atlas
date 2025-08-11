@@ -1,6 +1,6 @@
-#  Atlas - CI/CD Documentation
+# 📝 Atlas - CI/CD Documentation
 
-##  Déploiement et Intégration Continue
+## 🚀 Déploiement et Intégration Continue
 
 ### Installation manuelle (pour tests)
 
@@ -20,17 +20,19 @@ docker-compose up -d
 docker exec atlas_symfony_backend_container composer install
 docker exec atlas_symfony_backend_container php bin/console doctrine:migrations:migrate
 docker exec atlas_symfony_backend_container php bin/console lexik:jwt:generate-keypair
+```
 
-🔧 Automatisation Jenkins
+### Automatisation Jenkins
 Prérequis
 
 Jenkins installé avec plugins Docker et Git
 Credentials DockerHub : DOCKERHUB_USERNAME et DOCKERHUB_PASSWORD
 
-Pipeline Backend (Jenkinsfile - racine)
-groovypipeline {
+Pipeline Backend (Jenkinsfile )  
+
+```bash
+pipeline {
     agent any
-    
     stages {
         stage("Checkout") {
             steps {
@@ -72,8 +74,12 @@ groovypipeline {
         }
     }
 }
-Pipeline Frontend (front/Jenkinsfile)
-groovypipeline {
+
+```
+Pipeline Frontend (Jenkinsfile) 
+
+```bash
+pipeline {
     agent any
     
     stages {
@@ -116,27 +122,28 @@ groovypipeline {
         }
     }
 }
+```
 
-Processus CI/CD Automatisé
-GitHub Push → Jenkins Trigger → Build & Test → Docker Push → Auto Deploy → Health Check
-     ↓              ↓              ↓           ↓           ↓            ↓
-   Code Git    Auto Detect    npm/composer   DockerHub   VPS Server   Verify
-Stack technologique
+## Processus CI/CD Automatisé
+
+| Étape | Action | Description |
+|-------|--------|-------------|
+| 1️⃣ | **GitHub Push** | Code Git committé sur main |
+| ⬇️ | **Jenkins Trigger** | Auto Detect du nouveau code |
+| 2️⃣ | **Build & Test** | npm/composer + tests automatiques |
+| ⬇️ | **Docker Push** | Image envoyée vers DockerHub |
+| 3️⃣ | **Auto Deploy** | Déploiement automatique sur VPS Server |
+
+
+## Stack technologique
 
 Frontend : React + Vite + Tailwind + Vitest
 Backend : Symfony + JWT + Doctrine + MySQL
 DevOps : Docker + Jenkins + DockerHub
 Serveur : VPS Linux "LWS" + Docker Compose
 
-🌐 URLs de production
+## 🌐 URLs de production
 
 Frontend : http://180.149.199.211:3002
 Backend API : http://180.149.199.211:8092/
 Base de données : MySQL (port 3306 interne)
-
-🔄 Workflow complet
-
-Développement : Code sur branche locale
-Integration : Push vers GitHub main
-CI : Jenkins build + test automatique
-CD : Deploy automatique sur VPS
